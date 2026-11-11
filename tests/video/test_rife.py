@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import stat
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -378,3 +379,26 @@ def test_real_rife_repair_rejects_outline_loss_and_keeps_the_original_middle(mon
     assert interpolate.made == facts["attempts"] == 1
     assert facts["replaced"] == [] and facts["rounds"][0]["faults"] == ["outline"]
     assert [f.tobytes() for f in out] == before == [f.tobytes() for f in frames]
+
+
+def test_the_binary_runs_in_the_calls_scratch_directory_so_its_log_never_lands_where_sprite_gen_was_started(monkeypatch, tmp_path):
+    """rife-ncnn-vulkan writes `rife-ncnn-vulkan.<time>.log` into its working directory on every call: the call runs
+    in its own scratch directory, which is removed with the frames it made."""
+    seen = {}
+
+    def run(argv, **kwargs):
+        seen.update(kwargs)
+        out = Path(argv[argv.index("-o") + 1])
+        Image.open(argv[argv.index("-0") + 1]).save(out)
+        (Path(kwargs["cwd"]) / "rife-ncnn-vulkan.log").write_text("log")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    started = tmp_path / "started"
+    started.mkdir()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.chdir(started)
+    monkeypatch.setattr(rife.subprocess, "run", run)
+    rife._call(tmp_path / rife.BINARY, tmp_path / rife.MODEL, _disc(40), _disc(72), 0.5, scratch, ())
+    assert Path(seen["cwd"]) == scratch
+    assert list(started.iterdir()) == []

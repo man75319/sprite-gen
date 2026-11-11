@@ -494,9 +494,11 @@ def _call(binary: Path, model: Path, a: Image.Image, b: Image.Image, t: float, t
     out = tmp / "o.png"
     out.unlink(missing_ok=True)
     try:
+        # cwd: the binary writes a `rife-ncnn-vulkan.<time>.log` into its working directory on every call; run in
+        # the call's scratch directory, the log goes with it instead of piling up wherever sprite-gen was started.
         proc = subprocess.run(
             [str(binary), "-0", str(tmp / "a.png"), "-1", str(tmp / "b.png"), "-o", str(out), "-s", f"{t:.4f}", "-m", str(model), *modes],
-            capture_output=True, text=True, timeout=CALL_TIMEOUT_SECONDS,
+            capture_output=True, text=True, timeout=CALL_TIMEOUT_SECONDS, cwd=str(tmp),
         )
     except subprocess.TimeoutExpired as exc:
         raise RifeUnavailable(f"{binary.name} made no frame in {CALL_TIMEOUT_SECONDS} s and was stopped "
