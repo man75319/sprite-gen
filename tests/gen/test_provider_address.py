@@ -332,9 +332,12 @@ def test_a_trailing_slash_is_the_same_base() -> None:
     assert address.url("xai", "/videos/req-1", env=env) == "http://127.0.0.1:9/xai/videos/req-1"
 
 
-def test_the_registry_is_the_four_providers_and_their_documented_addresses() -> None:
+def test_the_registry_is_the_providers_and_their_documented_addresses() -> None:
     from sprite_gen.gen import address
-    assert {name: (p.env, p.default) for name, p in address.PROVIDERS.items()} == DEFAULTS
+    # `DEFAULTS` is the three the older cases drive; the DMXAPI relay is registered beside them and its address
+    # is asserted here alone, so a broken default is still caught without giving every relay-less case a fourth.
+    assert {name: (p.env, p.default) for name, p in address.PROVIDERS.items()} == {
+        **DEFAULTS, "dmx": ("SPRITE_GEN_DMX_BASE_URL", "https://www.dmxapi.cn/v1")}
 
 
 def _modules() -> list[Path]:
@@ -343,7 +346,8 @@ def _modules() -> list[Path]:
 
 def test_no_module_but_the_registry_names_a_provider_address() -> None:
     """A copy of an address anywhere else would be a call the variable does not move."""
-    hosts = [urllib.parse.urlsplit(base).netloc for _env, base in DEFAULTS.values()]
+    hosts = [urllib.parse.urlsplit(base).netloc
+             for _env, base in (*DEFAULTS.values(), ("SPRITE_GEN_DMX_BASE_URL", "https://www.dmxapi.cn/v1"))]
     named = [(path.relative_to(ROOT).as_posix(), host) for path in _modules() if path.name != "address.py"
              for host in hosts if host in path.read_text(encoding="utf-8")]
     assert named == []

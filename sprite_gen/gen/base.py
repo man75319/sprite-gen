@@ -32,6 +32,8 @@ PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 PROVIDER_CODEX = "codex"
 PROVIDER_GROK = "grok"
 PROVIDER_OPENAI = "openai"
+# A relay's OpenAI-Responses-shaped route (`dmx_provider`): Doubao Seedream images through DMXAPI.
+PROVIDER_DMX = "dmx"
 
 # Transparency strategy — a capability each provider declares exactly once
 # (`Provider.transparency`). The orchestrator reads it; nothing else decides.
@@ -309,6 +311,11 @@ class GenRequest:
     # legal for a provider whose `transparency` is `native`; the orchestrator gates
     # it and the provider carries the request into its transport prompt.
     native_alpha: bool = False
+    # The chroma key this run plans to key out (`green`/`magenta`), set only when the
+    # strategy is `chroma`. A provider that cannot return alpha asks the model for this
+    # key's background itself, so the prompt it sends and the key the orchestrator
+    # removes are the same one. None = the provider adds nothing.
+    chroma_key: str | None = None
 
 
 def publish_png(data: bytes, path: Path, *, label: str) -> None:

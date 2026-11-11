@@ -15,7 +15,7 @@ from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import PurePath
 from typing import Any
 
-from sprite_gen.gen import address, anthropic_api, openai_provider, xai
+from sprite_gen.gen import address, anthropic_api, dmx_provider, openai_provider, xai
 from sprite_gen.gen.base import LOGINS_ENV
 from sprite_gen.util.console import utf8_streams
 
@@ -26,9 +26,9 @@ KIND = "sprite-gen-capabilities"
 # `base.logins_on`); `curation` reaches xAI by its reroll and in-between buttons (codex or grok); `video-set` makes
 # each clip with `video` and checks a side view's facing on Grok.
 PROVIDER_CALLS: dict[str, tuple[str, ...]] = {
-    "gen": (address.OPENAI, address.XAI),
-    "gen-set": (address.OPENAI, address.XAI),
-    "logo": (address.OPENAI, address.XAI),
+    "gen": (address.OPENAI, address.XAI, address.DMX),
+    "gen-set": (address.OPENAI, address.XAI, address.DMX),
+    "logo": (address.OPENAI, address.XAI, address.DMX),
     "pixel-draw": (address.ANTHROPIC,),
     "curation": (address.XAI,),
     "video": (address.XAI,),
@@ -40,7 +40,7 @@ PROVIDER_CALLS: dict[str, tuple[str, ...]] = {
 # Verbs that call a provider and buy nothing: `video-resume` polls and downloads a clip an earlier run bought.
 NO_PURCHASE = frozenset({"video-resume"})
 KEY_ENVS = {address.OPENAI: openai_provider.AUTH_ENV, address.XAI: xai.AUTH_ENV,
-            address.ANTHROPIC: anthropic_api.AUTH_ENV}
+            address.ANTHROPIC: anthropic_api.AUTH_ENV, address.DMX: dmx_provider.AUTH_ENV}
 # Argument types by name; any other is its parsing function's name without `_` and `parse_` (`_parse_grid`: grid).
 TYPES = {str: None, int: "int", float: "float"}
 

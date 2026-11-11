@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from sprite_gen.gen import codex_provider
-from sprite_gen.gen.base import PROVIDER_CODEX, PROVIDER_GROK, PROVIDER_OPENAI
+from sprite_gen.gen.base import PROVIDER_CODEX, PROVIDER_DMX, PROVIDER_GROK, PROVIDER_OPENAI
+from sprite_gen.gen.dmx_provider import AUTH_ENV as DMX_AUTH_ENV
+from sprite_gen.gen.dmx_provider import resolve_credential as resolve_dmx_credential
 from sprite_gen.gen.openai_provider import AUTH_ENV as OPENAI_AUTH_ENV
 from sprite_gen.gen.openai_provider import resolve_credential as resolve_openai_credential
 from sprite_gen.gen.xai import AUTH_SOURCE_API_KEY, resolve_credential
@@ -38,6 +40,16 @@ def probe_access(provider: str) -> dict:
                     "reason": f"{OPENAI_AUTH_ENV} is not set; export the key or choose another provider"}
         return {**result, "login": "ready", "billing": BILLING_API_CREDIT,
                 "reason": f"OpenAI images will use {OPENAI_AUTH_ENV} and separate API credit; confirm this billing choice."}
+    if provider == PROVIDER_DMX:
+        # The relay's key is the whole credential, and every call bills it.
+        try:
+            resolve_dmx_credential()
+        except (SystemExit, OSError, ValueError):
+            return {**result, "login": LOGIN_UNAVAILABLE,
+                    "reason": f"{DMX_AUTH_ENV} is not set; export the relay key or choose another provider"}
+        return {**result, "login": "ready", "billing": BILLING_API_CREDIT,
+                "reason": f"Doubao Seedream will use {DMX_AUTH_ENV} through the relay and separate API credit; "
+                          "confirm this billing choice."}
     if provider != PROVIDER_GROK:
         raise ValueError(f"unknown provider: {provider}")
     try:

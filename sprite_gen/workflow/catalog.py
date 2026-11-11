@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The two user journeys and their selectable fields, declared once."""
 from sprite_gen.gen import CODEX_UNAVAILABLE_ASK, CODEX_UNAVAILABLE_CHOICES, CODEX_UNAVAILABLE_SETTING, PROVIDERS
-from sprite_gen.gen.base import PROVIDER_CODEX, PROVIDER_GROK, PROVIDER_OPENAI
+from sprite_gen.gen.base import PROVIDER_CODEX, PROVIDER_DMX, PROVIDER_GROK, PROVIDER_OPENAI
 
 MOTION_METHODS = {
     "gpt-rows": {"label": "지피티 이미지 스프라이트", "provider": PROVIDER_CODEX, "doc": "docs/atlas-workflow.md",
@@ -16,6 +16,7 @@ PROVIDER_LABELS = {
     PROVIDER_CODEX: "지피티",
     PROVIDER_GROK: "그록",
     PROVIDER_OPENAI: "지피티 API (서버·SaaS 용, 호출당 과금)",
+    PROVIDER_DMX: "더우바오 시드림 (DMXAPI 중계, 호출당 과금)",
 }
 # Subscription-first (수홍 2026-09-20): the guided flow offers only the routes
 # that run on a subscription the user already pays for as the image provider.

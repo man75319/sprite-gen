@@ -656,8 +656,18 @@ def walk_start_prompt(direction: str, key: str | None = None, handed: list[Hande
     return parts.text
 
 
+# The clip transport and model every child `sprite-gen video` of this batch runs (`--provider`, `--model`), set by
+# `run` from the CLI. A caller that injects its own `video_runner` never reads them.
+CLIP_PROVIDER: str | None = None
+CLIP_MODEL: str | None = None
+
+
 def run_video_cli(image: Path, prompt: str, out: Path, report: Path, *, duration: int, resolution: str, log: Path, last_frame: Path | None = None) -> int:
     cmd = [sys.executable, "-m", "sprite_gen.gen.video", "--image", str(image), "--prompt", prompt, "--out", str(out), "--duration", str(duration), "--resolution", resolution, "--no-audio", "--report", str(report)]
+    if CLIP_PROVIDER:
+        cmd += ["--provider", CLIP_PROVIDER]
+    if CLIP_MODEL:
+        cmd += ["--model", CLIP_MODEL]
     if last_frame is not None:
         cmd += ["--last-frame", str(last_frame)]
     return run_logged(cmd, log)
@@ -1417,6 +1427,11 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--character", help="short subject phrase used in the prompts (e.g. 'The armored knight')")
     parser.add_argument("--duration", type=int, default=None, help=f"seconds per clip for every state (default: {DEFAULT_DURATION_SECONDS}, attack {STATE_DURATION_SECONDS['attack']}); a repeating motion holds enough cycles at 3 s and a longer clip only costs more (2026-09-18)")
     parser.add_argument("--resolution", default="720p")
+    parser.add_argument("--provider", choices=("xai", "dmx"), default=None,
+                        help="clip transport every item runs (passed to `sprite-gen video`): xai (default) Grok Imagine; "
+                             "dmx Doubao Seedance through DMXAPI (4 s floor, no --reference, DMX_API_KEY)")
+    parser.add_argument("--model", default=None, help="clip model for every item (with --provider dmx, e.g. "
+                                                      "doubao-seedance-2-0-260128)")
     parser.add_argument("--key", choices=canvas_mod.KEYS, default="auto")
     parser.add_argument("--concurrency", type=int, default=3, help="parallel clip generations (starts are staggered regardless)")
     parser.add_argument("--start-gap", type=float, default=START_GAP_SECONDS, help="seconds between clip request starts")
@@ -1453,12 +1468,20 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run(**kwargs: object) -> int:
+    global CLIP_PROVIDER, CLIP_MODEL
+    CLIP_PROVIDER = str(kwargs["provider"]) if kwargs.get("provider") else None
+    CLIP_MODEL = str(kwargs["model"]) if kwargs.get("model") else None
+    duration = int(kwargs["duration"]) if kwargs.get("duration") else None
+    if CLIP_PROVIDER == "dmx" and duration is None:
+        # Seedance's own floor is 4 s (its per-state defaults here are 3 and 2): one value for every state keeps the
+        # set's clips comparable, and `--duration` still wins.
+        duration = 4
     payload = run_set(
         end_frames=_parse_end_frames(list(kwargs.get("end_frame") or [])),
         bases=_parse_bases(list(kwargs.get("base") or [])),  # type: ignore[arg-type]
         states=[s.strip() for s in str(kwargs.get("states") or "").split(",") if s.strip()],
         root=Path(str(kwargs["out_dir"])), character=kwargs.get("character"),  # type: ignore[arg-type]
-        duration=(int(kwargs["duration"]) if kwargs.get("duration") else None), resolution=str(kwargs.get("resolution") or "720p"), key=str(kwargs.get("key") or "auto"),
+        duration=duration, resolution=str(kwargs.get("resolution") or "720p"), key=str(kwargs.get("key") or "auto"),
         concurrency=int(kwargs.get("concurrency") or 3), force=bool(kwargs.get("force")), gap=float(kwargs.get("start_gap") or START_GAP_SECONDS),
         facing=str(kwargs.get("facing") or "right"), facing_fix=str(kwargs.get("facing_fix") or "none"),
         shape=(str(kwargs["shape"]) if kwargs.get("shape") else None), anchor=(str(kwargs["anchor"]) if kwargs.get("anchor") else None), spill=str(kwargs.get("spill") or "auto"),

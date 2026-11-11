@@ -21,6 +21,7 @@ from PIL import Image
 from http_answer import Answer
 from sprite_gen import gen
 from sprite_gen.gen import grok_provider as grok
+from sprite_gen.gen import dmx_provider as dmx
 from sprite_gen.gen import openai_provider as openai
 from sprite_gen.gen import base, codex_provider, retry, xai
 from sprite_gen.gen.base import GenRequest
@@ -331,7 +332,8 @@ def test_provider_is_registered_everywhere_a_provider_must_be(api):
     assert "openai" in gen.PROVIDERS
     assert isinstance(gen._make_provider("openai", keep_session=False), openai.OpenAIProvider)
     # Each adapter's name is its registered name, in the registry's order: a run's report says `provider` by it.
-    assert [codex_provider.CodexProvider.name, grok.GrokProvider.name, openai.OpenAIProvider.name] == list(gen.PROVIDERS)
+    assert [codex_provider.CodexProvider.name, grok.GrokProvider.name, openai.OpenAIProvider.name,
+            dmx.DmxProvider.name] == list(gen.PROVIDERS)
     # Every registered backend is labelled, so a new one can never be dropped from
     # the workflow surface by a silent positional zip.
     assert set(PROVIDER_LABELS) == set(gen.PROVIDERS)
@@ -353,7 +355,7 @@ def test_provider_is_registered_everywhere_a_provider_must_be(api):
 def test_openai_is_never_a_default_and_runs_only_when_chosen(monkeypatch, api):
     """불변식 1: no default, no guided-flow image provider; only a choice the user made reaches it."""
     assert gen.HARD_DEFAULT_PROVIDER == "codex"
-    assert gen.EXPLICIT_ONLY_PROVIDERS == ("openai",)
+    assert gen.EXPLICIT_ONLY_PROVIDERS == ("openai", "dmx")
     monkeypatch.delenv("SPRITE_GEN_DEFAULT_PROVIDER", raising=False)
     monkeypatch.setattr(gen, "_codex_available", lambda: (True, ""))
     assert gen.resolve_default_provider() == ("codex", None)

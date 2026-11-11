@@ -30,7 +30,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .base import PROVIDER_GROK, PROVIDER_OPENAI
+from .base import PROVIDER_DMX, PROVIDER_GROK, PROVIDER_OPENAI
 
 CODE_PATTERN = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
 
@@ -57,6 +57,9 @@ REDACTED = "[redacted]"
 POLICY_CODES: dict[str, frozenset[str]] = {
     PROVIDER_OPENAI: frozenset({"moderation_blocked"}),
     PROVIDER_GROK: frozenset(),
+    # A relay's error vocabulary is the relay's, and DMXAPI documents no content-policy code: a refusal there
+    # is read by its status and body, never guessed into CONTENT_POLICY.
+    PROVIDER_DMX: frozenset(),
 }
 
 

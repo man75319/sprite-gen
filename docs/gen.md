@@ -19,6 +19,7 @@ added, however it is invoked
 | `codex` | codex `image_gen` | ChatGPT OAuth | your ChatGPT subscription | inline base64 in the session rollout jsonl, decoded deterministically | **`native`** — image_gen returns a real alpha channel when asked |
 | `grok` | direct Imagine `/images/generations` or `/images/edits` | Grok login (preferred) or `XAI_API_KEY` | your SuperGrok Imagine quota; console credit only on the key route | inline bytes decoded and re-encoded as a verified PNG | `chroma` — Imagine returns JPEG only; generate on a key and matte it out |
 | `openai` | direct Images `/v1/images/generations` or `/v1/images/edits` | `OPENAI_API_KEY` | **billed per call** — for servers and SaaS | inline base64 decoded and published as a verified PNG | **`native`** — `background: transparent` returns a real alpha channel |
+| `dmx` | DMXAPI `POST /v1/responses` (Doubao Seedream and the relay's catalogue) | `DMX_API_KEY` | **billed per call** against the relay | inline base64 (`response_format: b64_json`), or the answered URL downloaded, decoded and published | `chroma` — Seedream returns no alpha and the route has no `background` knob; the provider asks for the planned key and the engine mats it out |
 
 The strategy is declared **once**, on the adapter (`Provider.transparency`), and is
 the only place that says what a backend can do. See
@@ -157,6 +158,7 @@ fragment, or the call stops naming the variable.
 | OpenAI | `SPRITE_GEN_OPENAI_BASE_URL` | `https://api.openai.com/v1` | `gen --provider openai` images and edits, its vision checks (facing, the logo's text) |
 | xAI | `SPRITE_GEN_XAI_BASE_URL` | `https://api.x.ai/v1` | `gen --provider grok` images and edits, its vision checks, the video facing check, `video` / `video-extend` / `video-edit` requests and polls, `video-resume` polls, the clip's download |
 | Anthropic | `SPRITE_GEN_ANTHROPIC_BASE_URL` | `https://api.anthropic.com/v1` | `pixel-draw` messages, Message Batches, a batch's results file |
+| DMXAPI | `SPRITE_GEN_DMX_BASE_URL` | `https://www.dmxapi.cn/v1` | `gen --provider dmx` images (Doubao Seedream), its vision checks (`SPRITE_GEN_DMX_VISION_MODEL`, default `doubao-seed-2-1-pro-260915`) |
 
 The value is the API root with its version path, as the default is: a request for
 `/images/generations` goes to `<value>/images/generations` with the same method,

@@ -89,7 +89,7 @@ def test_every_flag_a_verbs_help_prints_is_listed(monkeypatch) -> None:
 def test_types_defaults_and_flags_are_written_as_json() -> None:
     gen = {arg["name"]: arg for arg in _document()["verbs"]["gen"]["args"]}
     assert gen["--out"]["type"] == "path" and gen["--out"]["required"] is True
-    assert gen["--provider"]["choices"] == ["codex", "grok", "openai"]
+    assert gen["--provider"]["choices"] == ["codex", "grok", "openai", "dmx"]
     slicing = {arg["name"]: arg for arg in _document()["verbs"]["slice-sheet"]["args"]}
     assert slicing["--grid"] == {"name": "--grid", "type": "grid", "default": [3, 2]}
     assert slicing["--cell-width"] == {"name": "--cell-width", "type": "int", "default": 512}
@@ -133,7 +133,7 @@ def test_what_each_paid_verb_calls() -> None:
     verbs = _document()["verbs"]
     paid = {name: entry["providers"] for name, entry in verbs.items() if entry["paid"]}
     assert paid == {
-        "gen": ["openai", "xai"], "gen-set": ["openai", "xai"], "logo": ["openai", "xai"],
+        "gen": ["openai", "xai", "dmx"], "gen-set": ["openai", "xai", "dmx"], "logo": ["openai", "xai", "dmx"],
         "pixel-draw": ["anthropic"], "curation": ["xai"],
         "video": ["xai"], "video-extend": ["xai"], "video-edit": ["xai"], "video-set": ["xai"],
     }
@@ -151,6 +151,8 @@ def test_the_provider_section_is_the_address_registry_and_the_key_names() -> Non
         "xai": {"base_url_env": "SPRITE_GEN_XAI_BASE_URL", "base_url": "https://api.x.ai/v1", "key_env": "XAI_API_KEY"},
         "anthropic": {"base_url_env": "SPRITE_GEN_ANTHROPIC_BASE_URL", "base_url": "https://api.anthropic.com/v1",
                       "key_env": "ANTHROPIC_API_KEY"},
+        "dmx": {"base_url_env": "SPRITE_GEN_DMX_BASE_URL", "base_url": "https://www.dmxapi.cn/v1",
+                "key_env": "DMX_API_KEY"},
     }
 
 

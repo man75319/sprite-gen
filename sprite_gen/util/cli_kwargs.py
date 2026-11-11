@@ -19,6 +19,10 @@ def namespace_from_kwargs(parser: argparse.ArgumentParser, kwargs: Mapping[str, 
     for action in parser._actions:
         if action.dest == "help":
             continue
+        if action.dest in values:
+            # Two flags may share one dest (a mutually exclusive pair such as --audio/--no-audio): the first one
+            # carries the caller's value, and the second must not overwrite it with its own default.
+            continue
         default = [] if action.nargs == "*" else action.default
         if default is argparse.SUPPRESS:
             default = None

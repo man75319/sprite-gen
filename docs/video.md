@@ -31,6 +31,30 @@ Invariants:
 
 - `<IMAGE_n>` is **0-based**: `<IMAGE_0>` is the first `--reference`.
 
+## Doubao Seedance through DMXAPI (`--provider dmx`)
+
+`video --provider dmx` sends the same still and prompt through DMXAPI's `POST /v1/responses` instead of
+xAI's `/videos/*`, to a Doubao Seedance model — `doubao-seedance-2-0-260128` when `--provider dmx` is named
+without `--model`. The relay answers a submit with a task id only and the clip comes back from a second POST
+that names the relay's query model (`seedance-2-0-get`, or `seedance-2-5-get` for the 2.5 family;
+`SPRITE_GEN_DMX_VIDEO_QUERY_MODEL` overrides it). `video-extend`, `video-edit` and `video-resume` stay on
+xAI: the relay has no counterpart to those three.
+
+| | xAI (`--provider xai`, the default) | DMXAPI (`--provider dmx`) |
+|---|---|---|
+| transport | `POST /v1/videos/generations`, poll `GET /v1/videos/{id}` | `POST /v1/responses` (task id), poll `POST /v1/responses` naming the query model |
+| credential | the grok login, else `XAI_API_KEY` | `DMX_API_KEY` (base: `SPRITE_GEN_DMX_BASE_URL`) |
+| duration | 1–15 s | 4–15 s |
+| resolution | 480p / 720p / 1080p | 480p / 720p / 1080p / 4k |
+| references | 1–7 `--reference` | none — refused before the send |
+| last frame | `--last-frame` | `--last-frame`, sent as the `last_frame` input role |
+| audio | `--audio` / `--no-audio` | the same flags (`generate_audio`) |
+| report `provider` | `grok-imagine` | `dmx-seedance` |
+
+The task id is the only way back to a clip that was paid for: every ending after the submit names it, and
+nothing is submitted twice. `video-set --provider dmx` runs the whole directions x states pipeline on it; with
+no `--duration` its per-state defaults (3 s, 2 s for attack) are raised to Seedance's 4 s floor.
+
 ## Setup — pick one credential
 
 | `auth_source` | What you need | Billing | How to set it up |

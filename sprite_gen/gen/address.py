@@ -38,11 +38,16 @@ class Provider:
 # `workflow.capabilities`) names a provider by. A host, not an image provider: `OPENAI` is the API sprite-gen calls,
 # `base.PROVIDER_OPENAI` the image provider that calls it, two names that happen to be spelled alike.
 OPENAI, XAI, ANTHROPIC = "openai", "xai", "anthropic"
+# DMXAPI: a relay that serves its own catalogue (Doubao Seedream/Seedance, and the gpt-image family) through an
+# OpenAI-Responses-shaped `/responses` route. Its base is a variable, so a self-hosted proxy of the same shape
+# needs no code change.
+DMX = "dmx"
 
 PROVIDERS = {provider.name: provider for provider in (
     Provider(OPENAI, "SPRITE_GEN_OPENAI_BASE_URL", "https://api.openai.com/v1"),
     Provider(XAI, "SPRITE_GEN_XAI_BASE_URL", "https://api.x.ai/v1"),
     Provider(ANTHROPIC, "SPRITE_GEN_ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1"),
+    Provider(DMX, "SPRITE_GEN_DMX_BASE_URL", "https://www.dmxapi.cn/v1"),
 )}
 FETCH_PATH = "/sprite-gen/fetch"
 

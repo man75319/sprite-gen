@@ -61,6 +61,7 @@ from . import prompt_parts
 from .base import (
     CODEX_UNAVAILABLE_EXIT,
     PROVIDER_CODEX,
+    PROVIDER_DMX,
     PROVIDER_GROK,
     PROVIDER_OPENAI,
     QUALITIES,
@@ -78,11 +79,12 @@ from .base import (
     verify_png,
 )
 from .codex_provider import CodexProvider
+from .dmx_provider import DmxProvider
 from .grok_provider import GrokProvider
 from .openai_provider import OpenAIProvider
 from sprite_gen.util.console import utf8_streams
 
-PROVIDERS = (PROVIDER_CODEX, PROVIDER_GROK, PROVIDER_OPENAI)
+PROVIDERS = (PROVIDER_CODEX, PROVIDER_GROK, PROVIDER_OPENAI, PROVIDER_DMX)
 # `--alpha-mode`: `auto` reads the provider's declared strategy (the SSoT);
 # `native` / `chroma` force one. Forcing `native` on a chroma-only provider fails
 # loud — a strategy the backend cannot execute is not a fallback candidate.
@@ -98,7 +100,7 @@ HARD_DEFAULT_PROVIDER = PROVIDER_CODEX
 # A per-call API-billed backend is never a default: only a choice the user made
 # reaches it, so nothing routes a subscription user onto metered credit unasked
 # (구독 우선 불변식 1-2).
-EXPLICIT_ONLY_PROVIDERS = (PROVIDER_OPENAI,)
+EXPLICIT_ONLY_PROVIDERS = (PROVIDER_OPENAI, PROVIDER_DMX)
 # What a default codex that cannot run here turns into (수홍 2026-10-16, docs/gen.md "When codex cannot run"):
 # codex is not signed in (`codex_provider.codex_login`), or `codex exec` said its usage is used up
 # (`codex_provider.CodexUsageLimit`). `ask` (the default) ends the call with one question and nothing generated
@@ -223,6 +225,8 @@ def _make_provider(name: str, *, keep_session: bool):
         return GrokProvider()
     if name == PROVIDER_OPENAI:
         return OpenAIProvider()
+    if name == PROVIDER_DMX:
+        return DmxProvider()
     raise SystemExit(f"gen: unknown provider {name!r}; expected one of {', '.join(PROVIDERS)}")
 
 
@@ -519,6 +523,9 @@ def generate_image(
             quality=quality,
             resolution=resolution,
             native_alpha=strategy == TRANSPARENCY_NATIVE,
+            # A chroma-only provider asks the model for this key's background itself (dmx: Seedream has no alpha);
+            # the engine does not, because it adds its line only for a step-down it planned itself.
+            chroma_key=chroma_key if strategy == TRANSPARENCY_CHROMA else None,
         )
         # 타임아웃 1회 관측 가능 재시도 — 산발 provider 스톨은 같은 호출 재시도로
         # 대부분 통과한다 (회귀 2026-07-19). 두 번째도 스톨이면 fail loud.

@@ -27,3 +27,11 @@ CLAUDE.md
 # build artifacts of an in-place release build (scripts/release_publish.py without --prebuilt)
 /build/
 /dist/
+
+# ── MyAutoSprite local additions (never track) ──
+# Local model credentials and wrapper scripts: local\env.local.ps1 holds a real API key.
+/local/
+# Runs and their artifacts: clips, frames, atlases, GIFs (gigabytes).
+/work/
+# Downloaded tools (ffmpeg, libwebp, RIFE): binaries, not source.
+/.tools/

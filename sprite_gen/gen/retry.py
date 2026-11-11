@@ -68,12 +68,16 @@ UNTAKEN: dict[str, frozenset[int]] = {
     address.ANTHROPIC: frozenset({429, 500, 529}),
     address.OPENAI: frozenset({429, 503}),
     address.XAI: frozenset({429}),
+    # DMXAPI forwards an upstream 429 as its own 429 and documents nothing else as "not taken"; a 5xx it
+    # answers itself may have been worked on upstream, so it is returned as it came.
+    address.DMX: frozenset({429}),
 }
 ACT_FIRST: dict[str, frozenset[str]] = {
     address.ANTHROPIC: frozenset({"enforced_spend_limit_reached"}),
     address.OPENAI: frozenset({"credit_balance_exhausted", "organization_spend_limit_exceeded",
                          "project_spend_limit_exceeded", "organization_usage_limit_exceeded", "insufficient_quota"}),
     address.XAI: frozenset(),
+    address.DMX: frozenset(),
 }
 GET_AGAIN = frozenset({429, 500, 502, 503, 504, 529})
 

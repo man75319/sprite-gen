@@ -74,6 +74,10 @@ from .xai import (
 from sprite_gen.util.console import utf8_streams
 
 DEFAULT_MODEL = "grok-imagine-video-1.5"
+# The clip providers: xAI's Imagine (`/videos/*`, the default) and DMXAPI's Relay (`/responses`, Doubao Seedance).
+PROVIDER_XAI = "xai"
+PROVIDER_DMX = "dmx"
+PROVIDERS = (PROVIDER_XAI, PROVIDER_DMX)
 # Extension and editing: the API rejects the 1.5 model on both endpoints, so the
 # verbs force the classic model and offer no --model flag (2026-09-13 measurement).
 CLASSIC_MODEL = "grok-imagine-video"
@@ -298,6 +302,7 @@ class VideoRequest:
     resolution: str = "720p"
     aspect_ratio: str | None = None
     model: str = DEFAULT_MODEL
+    provider: str = PROVIDER_XAI  # xai (Imagine `/videos/*`) or dmx (DMXAPI `/responses`, Doubao Seedance)
     generate_audio: bool | None = None  # None = API default
     last_frame: Path | None = None
     reference_images: list[Path] = field(default_factory=list)
@@ -372,11 +377,12 @@ class VideoResult:
     extra: dict[str, Any] = field(default_factory=dict)
     facing: dict[str, Any] | None = None
     held: dict[str, Any] | None = None  # the published clip read for a picture shown again (`read_held`), by the CLI
+    provider: str = "grok-imagine"  # the transport that made the clip, named in the report
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "kind": "sprite-gen-video-report",
-            "provider": "grok-imagine",
+            "provider": self.provider,
             "auth_source": self.auth_source,
             "model": self.model,
             "mode": self.mode,
@@ -510,10 +516,14 @@ def held_lines(clip: Path, record: dict[str, Any]) -> list[str]:
 
 def _validate(request: VideoRequest) -> None:
     validate_facing(request.facing, request.facing_fix)
+    if request.provider not in PROVIDERS:
+        raise SystemExit(f"video: --provider must be one of {', '.join(PROVIDERS)}, got {request.provider!r}")
     if request.direction not in (None, *handed_mod.VIEWS):
         raise SystemExit("video: --direction must be side, front, back, front_diagonal or back_diagonal")
     if request.facing_fix not in facing_mod.FIXES:
         raise SystemExit("video: --facing-fix must be mirror or none")
+    if request.provider == PROVIDER_DMX:
+        _validate_dmx(request)
     if request.direction == "side" and request.mode != MODE_IMAGE_TO_VIDEO:
         raise SystemExit("video: --direction side requires a single --image, without --last-frame or --reference")
     if not request.prompt.strip():
@@ -555,6 +565,29 @@ def _validate(request: VideoRequest) -> None:
         raise SystemExit(f"video: --resolution must be one of {', '.join(RESOLUTIONS)}, got {request.resolution!r}")
     if request.aspect_ratio is not None and request.aspect_ratio not in ASPECT_RATIOS:
         raise SystemExit(f"video: --aspect-ratio must be one of {', '.join(ASPECT_RATIOS)}, got {request.aspect_ratio!r}")
+
+
+def _validate_dmx(request: VideoRequest) -> None:
+    """Seedance's own limits, refused here rather than after the relay has taken a paid request."""
+    from . import dmx_video
+
+    if request.reference_images:
+        raise SystemExit(
+            "video: --provider dmx (Doubao Seedance) takes no reference images; animate one still with --image, "
+            "or use --provider xai with the Imagine model"
+        )
+    if not (dmx_video.DURATION_MIN <= request.duration <= dmx_video.DURATION_MAX):
+        raise SystemExit(
+            f"video: --provider dmx: Seedance takes {dmx_video.DURATION_MIN}..{dmx_video.DURATION_MAX} seconds, "
+            f"got {request.duration}"
+        )
+    if request.resolution not in dmx_video.RESOLUTIONS:
+        raise SystemExit(f"video: --provider dmx: --resolution must be one of {', '.join(dmx_video.RESOLUTIONS)}")
+    if request.aspect_ratio in dmx_video.UNSUPPORTED_RATIOS:
+        raise SystemExit(
+            f"video: --provider dmx: Seedance has no {request.aspect_ratio} ratio; it takes "
+            f"{', '.join(dmx_video.RATIOS)}"
+        )
 
 
 def _build_generation_body(request: VideoRequest, image: Path | None, last_frame: Path | None, references: list[Path]) -> dict[str, Any]:
@@ -849,6 +882,60 @@ def side_view_prompt(prompt: str, facing: str) -> prompt_parts.Prompt:
     return parts
 
 
+def _generate_dmx(request: VideoRequest, out: Path, image: Path | None, last_frame: Path | None,
+                  *, sleep: Callable[[float], None], poll_timeout: float | None) -> VideoResult:
+    """One Doubao Seedance clip through the DMXAPI relay (`dmx_video.submit_poll_publish`).
+
+    The relay has no facing check to ask and no reference-image mode, so this path is the still (and, when
+    given, the closing frame) and the prompt: nothing else is sent, and nothing else is claimed in the report.
+    """
+    from . import dmx_video
+    from .dmx_provider import AUTH_ENV as DMX_AUTH_ENV
+    from .dmx_provider import resolve_credential as resolve_dmx_credential
+
+    body = dmx_video.build_body(
+        model=request.model,
+        prompt=request.prompt,
+        image=_data_url(image) if image is not None else None,
+        last_frame=_data_url(last_frame) if last_frame is not None else None,
+        aspect_ratio=request.aspect_ratio,
+        resolution=request.resolution,
+        duration=request.duration,
+        generate_audio=request.generate_audio,
+    )
+    token = resolve_dmx_credential()
+    published = dmx_video.submit_poll_publish(body=body, out=out, token=token, verb="video",
+                                               sleep=sleep, poll_timeout=poll_timeout)
+    inputs: dict[str, Any] = {}
+    if image is not None:
+        inputs["image"] = str(image)
+    if last_frame is not None:
+        inputs["last_frame"] = str(last_frame)
+    return VideoResult(
+        out=out,
+        bytes=len(published.data),
+        model=published.model or request.model,
+        request_id=published.request_id,
+        auth_source=DMX_AUTH_ENV,
+        elapsed_seconds=published.elapsed_seconds,
+        polls=published.polls,
+        polls_refused=published.polls_refused,
+        polls_unanswered=published.polls_unanswered,
+        downloads=published.downloads,
+        duration_requested=request.duration,
+        duration_reported=published.duration_reported,
+        host=published.host,
+        image=image,
+        prompt=request.prompt,
+        resolution=request.resolution,
+        aspect_ratio=request.aspect_ratio,
+        generate_audio=request.generate_audio,
+        mode=MODE_IMAGE_TO_VIDEO if last_frame is None else MODE_FIRST_LAST,
+        inputs=inputs,
+        provider="dmx-seedance",
+    )
+
+
 def generate_video(
     request: VideoRequest,
     *,
@@ -865,11 +952,14 @@ def generate_video(
     download = download or http_download
     sleep = sleep or time.sleep
     _validate(request)
-    credential = credential or resolve_credential()
     out = request.out.expanduser().resolve()
     image = _resolved(request.image)
     last_frame = _resolved(request.last_frame)
     references = [path.expanduser().resolve() for path in request.reference_images]
+    if request.provider == PROVIDER_DMX:
+        # The relay path first: it reads DMX_API_KEY, never the xAI login or key this branch would resolve.
+        return _generate_dmx(request, out, image, last_frame, sleep=sleep, poll_timeout=poll_timeout)
+    credential = credential or resolve_credential()
 
     facing_report = None
     if request.direction == "side":
@@ -1123,6 +1213,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--duration", type=int, default=6, help=f"seconds, {DURATION_MIN}..{DURATION_MAX} (default 6)")
     parser.add_argument("--resolution", choices=RESOLUTIONS, default="720p")
     parser.add_argument("--aspect-ratio", choices=ASPECT_RATIOS, default=None, help="default: the still's own ratio")
+    parser.add_argument("--provider", choices=PROVIDERS, default=PROVIDER_XAI,
+                        help="xai (default): Grok Imagine `/videos/*`; dmx: Doubao Seedance through DMXAPI's "
+                             "`/responses` (needs DMX_API_KEY; no --reference, 4..15 s)")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     audio = parser.add_mutually_exclusive_group()
     audio.add_argument("--audio", dest="generate_audio", action="store_true", default=None, help="ask for generated audio")
@@ -1185,6 +1278,12 @@ def _publish_report(args: argparse.Namespace, make: Callable[[], VideoResult], *
 
 
 def _run(args: argparse.Namespace) -> int:
+    provider = getattr(args, "provider", PROVIDER_XAI)
+    model = args.model
+    if provider == PROVIDER_DMX and model == DEFAULT_MODEL:
+        # Naming the relay and leaving the model at its default asks for its model, not for Grok's.
+        from .dmx_video import DEFAULT_MODEL as DMX_DEFAULT_MODEL
+        model = DMX_DEFAULT_MODEL
     request = VideoRequest(
         image=args.image,
         prompt=_read_prompt(args),
@@ -1192,7 +1291,8 @@ def _run(args: argparse.Namespace) -> int:
         duration=args.duration,
         resolution=args.resolution,
         aspect_ratio=args.aspect_ratio,
-        model=args.model,
+        model=model,
+        provider=provider,
         generate_audio=args.generate_audio,
         last_frame=args.last_frame,
         reference_images=list(args.reference_images or []),
