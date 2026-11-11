@@ -147,6 +147,7 @@ sprite-gen unpack-atlas --atlas sheet.png             # finished atlas → curat
 sprite-gen recolor-palette --base <run>/sprite-sheet-alpha.png --out palette.draft.json
 sprite-gen recolor --run-dir <run> --spec recolor.spec.json      # → <run>/variants/
 sprite-gen export-aseprite --run-dir <run>                       # Aseprite JSON for Phaser / Flame
+sprite-gen export-phaser --name hero --loop walk=<loop dir> --out-dir <dir>  # video-loop strips → Phaser atlas
 ```
 
 **E · asset tools** — each accepts existing assets, including artwork from other tools.

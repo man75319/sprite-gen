@@ -10,7 +10,7 @@ from typing import Callable
 from sprite_gen import _modules, gen
 from sprite_gen.background import tile
 from sprite_gen.curate import anchor
-from sprite_gen.compose import compose_atlas, compose_cycle, compose_gif, export_aseprite, export_pngs
+from sprite_gen.compose import compose_atlas, compose_cycle, compose_gif, export_aseprite, export_phaser, export_pngs
 from sprite_gen.qa import correction_loop, inspect, preview, score, motion
 from sprite_gen.qa import holds as inspect_holds
 from sprite_gen.qa import handed as handed_check
@@ -256,6 +256,11 @@ COMMANDS: dict[str, tuple[str, Callable[[argparse.ArgumentParser], None], Callab
         "Export the composed atlas as Aseprite-compatible JSON metadata.",
         export_aseprite.add_arguments,
         export_aseprite.run,
+    ),
+    "export-phaser": (
+        "Pack video-loop strips into one Phaser character atlas (load.atlas JSON hash, one cell and one feet origin for every state, plus a meta with each animation's frameRate and repeat).",
+        export_phaser.add_arguments,
+        export_phaser.run,
     ),
     "anchor": (
         "Resolve/bake the direction anchor ref from curated truth (or pin which frame is the anchor).",

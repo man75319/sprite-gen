@@ -1,6 +1,6 @@
 # Engine export
 
-> Owns: Aseprite-compatible export for Phaser and Flame · Index: [docs/README.md](README.md)
+> Owns: Aseprite-compatible export for Phaser and Flame; the Phaser character atlas from video-loop strips · Index: [docs/README.md](README.md)
 
 `sprite-gen export-aseprite` describes a composed sprite-gen atlas using the JSON schema consumed by Aseprite loaders. It does not create an editable `.aseprite` source file and it does not re-encode the PNG.
 
@@ -35,6 +35,39 @@ this.add.sprite(100, 100, 'hero').play('idle');
 ```
 
 Phaser's official API documents `load.aseprite` and `createFromAseprite`; its implementation looks up each tagged frame by the stringified numeric index and reads each frame's duration. Sources: [Phaser AnimationManager](https://docs.phaser.io/api-documentation/4.0.0/class/animations-animationmanager), [Phaser source](https://github.com/phaserjs/phaser/blob/master/src/animations/AnimationManager.js).
+
+## Phaser, from video-loop strips — `export-phaser`
+
+`export-aseprite` reads a composed run (pipeline A). The video pipeline ends each motion as a strip
+(`<item>.strip.png` + `<item>.strip.json`, one cell size per state); `export-phaser` packs the strips of one
+character into one atlas a Phaser game loads with `load.atlas`:
+
+```bash
+$SPRITE_GEN_ROOT/.venv/bin/sprite-gen export-phaser --name frog --out-dir <game>/public/atlas --flip --max-cell 256   --loop idle=<set>/side-idle/loop --loop walk=<set>/side-walk/loop --loop death=<set>/side-death/loop
+```
+
+It writes `frog.png`, `frog.json` (TexturePacker JSON hash) and `frog.meta.json`, published together.
+
+| What | How |
+|---|---|
+| Frames | `<name>_<state>_NN`, every one the same untrimmed cell, 2 px of transparent margin in the cell and between cells |
+| One origin | each state's ground point lands on one anchor, so `sprite.y` is the ground line in every animation: a loop's lowest row and mean alpha centroid, a cut played once its first frame's (a lunge or a fall moves away from where it started, and the anchor does not follow it) |
+| `pivot` | every frame carries that origin; Phaser sets a sprite's origin from it on each frame change, and `setFlipX` mirrors about it (without a pivot Phaser mirrors inside the frame box, moving the feet by `w − 2·anchorX`) |
+| `<name>.meta.json` | `cell`, `anchor`, `origin`, and per state `{key: "<name>-<state>", prefix, count, zeroPad, frameRate, repeat}`: `frameRate` is the strip's `fps`, `repeat` is `-1` for a loop and `0` for a cut played once (Phaser then holds the last frame) |
+| `--flip` | mirrors every frame, for strips facing left in a game whose sprites face right |
+| `--max-cell N` | scales the uniform cell (and its anchor) so its longer side is at most N px, premultiplied Lanczos; without it cells stay as cut, pixels moved by whole pixels only |
+
+The strips must share one `body_h` (cut by one `video-set`, or with one `--body-height`); otherwise it refuses,
+since the character would change size between animations. An atlas over 2048 px prints a warning; the uniform
+cell is as tall as the highest jump and as wide as the longest lunge, so `--max-cell` or fewer frames is the remedy.
+
+```javascript
+this.load.atlas('frog', 'atlas/frog.png', 'atlas/frog.json');
+// in create(), for each anim of frog.meta.json:
+this.anims.create({ key: a.key, frameRate: a.frameRate, repeat: a.repeat,
+  frames: this.anims.generateFrameNames('frog', { prefix: a.prefix, start: 0, end: a.count - 1, zeroPad: a.zeroPad }) });
+this.add.sprite(x, groundY, 'frog').play('frog-walk');   // origin comes from each frame's pivot
+```
 
 ## Flutter and Flame
 

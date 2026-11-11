@@ -132,6 +132,7 @@ sprite-gen unpack-atlas --atlas sheet.png             # 成品图集 → 可供�
 sprite-gen recolor-palette --base <run>/sprite-sheet-alpha.png --out palette.draft.json
 sprite-gen recolor --run-dir <run> --spec recolor.spec.json      # → <run>/variants/
 sprite-gen export-aseprite --run-dir <run>                       # 供 Phaser / Flame 使用的 Aseprite JSON
+sprite-gen export-phaser --name hero --loop walk=<loop 目录> --out-dir <目录>  # video-loop 帧条 → Phaser 图集
 ```
 
 **E · 素材工具** —— 每个都接受现有素材，包括来自其他工具的美术资源。
