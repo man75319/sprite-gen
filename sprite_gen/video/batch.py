@@ -1426,7 +1426,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out-dir", required=True, type=Path, help="batch root; one folder per direction-state")
     parser.add_argument("--character", help="short subject phrase used in the prompts (e.g. 'The armored knight')")
     parser.add_argument("--duration", type=int, default=None, help=f"seconds per clip for every state (default: {DEFAULT_DURATION_SECONDS}, attack {STATE_DURATION_SECONDS['attack']}); a repeating motion holds enough cycles at 3 s and a longer clip only costs more (2026-09-18)")
-    parser.add_argument("--resolution", default="720p")
+    parser.add_argument("--resolution", default="480p", help="clip resolution for every item (default 480p: a sprite cell is a few hundred px, and a Seedance clip costs by its pixels)")
     parser.add_argument("--provider", choices=("xai", "dmx"), default=None,
                         help="clip transport every item runs (passed to `sprite-gen video`): xai (default) Grok Imagine; "
                              "dmx Doubao Seedance through DMXAPI (4 s floor, no --reference, DMX_API_KEY)")
@@ -1481,7 +1481,7 @@ def run(**kwargs: object) -> int:
         bases=_parse_bases(list(kwargs.get("base") or [])),  # type: ignore[arg-type]
         states=[s.strip() for s in str(kwargs.get("states") or "").split(",") if s.strip()],
         root=Path(str(kwargs["out_dir"])), character=kwargs.get("character"),  # type: ignore[arg-type]
-        duration=duration, resolution=str(kwargs.get("resolution") or "720p"), key=str(kwargs.get("key") or "auto"),
+        duration=duration, resolution=str(kwargs.get("resolution") or "480p"), key=str(kwargs.get("key") or "auto"),
         concurrency=int(kwargs.get("concurrency") or 3), force=bool(kwargs.get("force")), gap=float(kwargs.get("start_gap") or START_GAP_SECONDS),
         facing=str(kwargs.get("facing") or "right"), facing_fix=str(kwargs.get("facing_fix") or "none"),
         shape=(str(kwargs["shape"]) if kwargs.get("shape") else None), anchor=(str(kwargs["anchor"]) if kwargs.get("anchor") else None), spill=str(kwargs.get("spill") or "auto"),

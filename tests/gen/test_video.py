@@ -246,7 +246,7 @@ def test_cli_run_writes_report_and_defaults(tmp_path: Path, monkeypatch, clock) 
 def test_cli_parser_shape() -> None:
     parser = video._build_parser()
     args = parser.parse_args(["--image", "a.png", "--prompt", "p", "--out", "o.mp4"])
-    assert args.duration == 6 and args.resolution == "720p" and args.aspect_ratio is None and args.generate_audio is None
+    assert args.duration == 6 and args.resolution == "480p" and args.aspect_ratio is None and args.generate_audio is None
     assert parser.parse_args(["--image", "a.png", "--out", "o.mp4", "--no-audio"]).generate_audio is False
     assert parser.parse_args(["--image", "a.png", "--out", "o.mp4", "--audio"]).generate_audio is True
     with pytest.raises(SystemExit):

@@ -95,7 +95,7 @@ sprite-gen video \
   --prompt "Camera locked. Gentle idle sway, tail flick." \   # or --prompt-file
   --out clip.mp4 \
   [--duration 6]                     # 1..15 seconds (default 6)
-  [--resolution 720p]                # 480p | 720p | 1080p (default 720p; 1080p is refused with --reference)
+  [--resolution 720p]                # 480p | 720p | 1080p (default 480p; 1080p is refused with --reference)
   [--aspect-ratio 1:1]               # 1:1 16:9 9:16 4:3 3:4 3:2 2:3 (default: the still's ratio)
   [--audio | --no-audio]             # default: the API's default (audio on)
   [--model grok-imagine-video-1.5]

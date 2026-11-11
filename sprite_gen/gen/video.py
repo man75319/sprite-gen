@@ -1211,7 +1211,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     )
     _add_prompt_and_report(parser)
     parser.add_argument("--duration", type=int, default=6, help=f"seconds, {DURATION_MIN}..{DURATION_MAX} (default 6)")
-    parser.add_argument("--resolution", choices=RESOLUTIONS, default="720p")
+    # 480p: a sprite cell is a few hundred px at most, and a clip costs by its pixels (Seedance) — 720p is a choice
+    parser.add_argument("--resolution", choices=RESOLUTIONS, default="480p", help="default 480p")
     parser.add_argument("--aspect-ratio", choices=ASPECT_RATIOS, default=None, help="default: the still's own ratio")
     parser.add_argument("--provider", choices=PROVIDERS, default=PROVIDER_XAI,
                         help="xai (default): Grok Imagine `/videos/*`; dmx: Doubao Seedance through DMXAPI's "
