@@ -50,6 +50,16 @@ Optional settings for `dmx`, in `.env`: `SPRITE_GEN_DMX_BASE_URL` (another relay
 
 ## Pipeline B (clip to sprite loop)
 
+**The still is opaque, on a flat key.** A cut-out (a transparent PNG, what `gen --transparent` returns) reaches the
+video model as the colour under its clear pixels, most often black, and no key cuts that clip (2026-11-12: four
+Seedance clips of a crab on black, paid for and thrown away). `video-canvas` and `video-set` now refuse a still with
+transparent pixels before any paid call; put it on a key first:
+
+```powershell
+# 0) a cut-out put on flat green, its lowest pixel on --baseline, --height tall (faint edge specks dropped: --alpha-floor)
+.venv\Scripts\python.exe scripts\myautosprite\make_key_canvas.py --source base.png --out base-green.png --height 400 --baseline 840
+```
+
 ```powershell
 # 1) the still: drawn on flat green or magenta already, or given a border by video-canvas (four corners one flat key)
 .venv\Scripts\sprite-gen.exe video-canvas --still base-green.png --state idle --key green --out canvas.png
@@ -85,6 +95,12 @@ whole, closing attack (one strike, or a two-strike combo). The item's record say
 
 ## The body plan (`--body-plan`): a monster is not a person
 
+**Many legs (a crab, a spider, an insect): `biped` and the legs in `--motion`.** There are three plans and none has
+more than four legs: `quadruped` says "it stays on all four legs" and `legless` "it has no legs", both wrong for eight.
+`biped` adds no leg count, so the crab (2026-11-12, `work/crab/character.json`) was filmed as `biped` with its eight
+legs and two claws named in every motion text. The cost: an attack under `biped` still carries the grip sentence ("one
+hand stays one hand"), which names hands the crab has not; it filmed well regardless.
+
 sprite-gen's default body is **biped (a person on two feet)**. Its attack sentence says "bare hands only if it holds
 nothing ... one hand stays one hand, both hands stay both hands", so a frog or a slime, which has no hands, is given
 **arms** by the model.
@@ -116,7 +132,7 @@ body_plan, description, resolution, key, motions) and `scripts\myautosprite\char
 | `char.ps1` | A character's `character.json` turned into `video-set` flags, so a run cannot forget the body plan |
 | `smoke.ps1` | One transparent side-view image through grok: are the key, the network and the endpoint working |
 | `flood_cut.py` | A flat background cut off a drawing by flood fill from the border only (art whose colours sit close to the paper) |
-| `make_key_canvas.py` | A cut-out drawing put on a flat chroma canvas, framed for `sprite-gen video` |
+| `make_key_canvas.py` | A cut-out drawing put on a flat chroma canvas, framed for `sprite-gen video`; pixels at alpha 64 or under dropped (`--alpha-floor`), so a generator's edge specks do not widen the subject's box and shrink it |
 | `make_sheet.py` | One row per state out of the loops `video-set` cut, for a single look at the whole set |
 
 ## Verified
@@ -141,6 +157,8 @@ body_plan, description, resolution, key, motions) and `scripts\myautosprite\char
 | `sprite_gen/video/batch.py` | `video-set --provider/--model`, the 4 s floor for dmx, `--ground-pin` |
 | `sprite_gen/video/loop.py` | `video-loop --ground-pin` |
 | `sprite_gen/video/batch.py`, `clip_prompt.py` | `--action-seconds`: a motion's own length, the clip and the count worked out from the provider's shortest clip |
+| `sprite_gen/video/canvas.py`, `batch.py` | a still with transparent pixels refused before any paid call (`refuse_transparent`) |
+| `sprite_gen/video/chain.py` | a `video-set` item's frames report, one folder up from its keyed/, read for the key and the rate |
 | `sprite_gen/video/nonloop.py` | a death or fall no longer has to end lower than it stood (a crab on its back is taller); its end pose only has to differ from its first |
 | `sprite_gen/compose/export_phaser.py` | the feet origin read per kind of loop, the alignment check and `<name>.align.png` |
 | `sprite_gen/util/env_file.py` | **New**: the checkout's `.env` and `.tools` read on start |
