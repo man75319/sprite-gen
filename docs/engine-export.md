@@ -46,12 +46,13 @@ character into one atlas a Phaser game loads with `load.atlas`:
 $SPRITE_GEN_ROOT/.venv/bin/sprite-gen export-phaser --name frog --out-dir <game>/public/atlas --flip --max-cell 256   --loop idle=<set>/side-idle/loop --loop walk=<set>/side-walk/loop --loop death=<set>/side-death/loop
 ```
 
-It writes `frog.png`, `frog.json` (TexturePacker JSON hash) and `frog.meta.json`, published together.
+It writes `frog.png`, `frog.json` (TexturePacker JSON hash) and `frog.meta.json`, published together, with
+`frog.align.png`, an alignment preview to look at (the game does not load it).
 
 | What | How |
 |---|---|
 | Frames | `<name>_<state>_NN`, every one the same untrimmed cell, 2 px of transparent margin in the cell and between cells |
-| One origin | each state's ground point lands on one anchor, so `sprite.y` is the ground line in every animation: a loop's lowest row and mean alpha centroid, a cut played once its first frame's (a lunge or a fall moves away from where it started, and the anchor does not follow it) |
+| One origin | each state's ground point lands on one anchor, so `sprite.y` is the ground line in every animation. A periodic loop (strip `kind: periodic`: a walk, a sway): its lowest row and mean alpha centroid, where a few frames (at most a tenth) reaching well below all the others — an impact burst, dust under the feet — do not set the row and are reported hanging below `sprite.y`. Any other state — a cut played once, or a loop from a stance back to it (`pinned`, `fixed`: an idle, an attack) — its first frame's (a lunge, a slash or a fall moves away from where it started, and the anchor does not follow it) |
 | `pivot` | every frame carries that origin; Phaser sets a sprite's origin from it on each frame change, and `setFlipX` mirrors about it (without a pivot Phaser mirrors inside the frame box, moving the feet by `w − 2·anchorX`) |
 | `<name>.meta.json` | `cell`, `anchor`, `origin`, and per state `{key: "<name>-<state>", prefix, count, zeroPad, frameRate, repeat}`: `frameRate` is the strip's `fps`, `repeat` is `-1` for a loop and `0` for a cut played once (Phaser then holds the last frame) |
 | `--flip` | mirrors every frame, for strips facing left in a game whose sprites face right |
@@ -60,6 +61,21 @@ It writes `frog.png`, `frog.json` (TexturePacker JSON hash) and `frog.meta.json`
 The strips must share one `body_h` (cut by one `video-set`, or with one `--body-height`); otherwise it refuses,
 since the character would change size between animations. An atlas over 2048 px prints a warning; the uniform
 cell is as tall as the highest jump and as wide as the longest lunge, so `--max-cell` or fewer frames is the remedy.
+
+### Alignment check
+
+Every export measures where each state stands once packed — its feet (the middle of the opaque columns just
+above its lowest row) and its ground row: a periodic loop averaged over its stride, any other state on its
+first frame — against `idle`'s (or the first state's). The report's `alignment` lists per state `feet_x` and
+`ground` (from the anchor), `dx` and `dy` (from the reference), its `tolerance` and `ok`; a state further than
+3 % of the reference's height (at least 2 px; twice that against a periodic loop, whose stance is a stride's mean)
+prints a warning: the body would jump when the animation switches.
+
+`<name>.align.png` shows it: one panel per state with the frame it starts on, the anchor's crosshair and the
+ground line, and a last panel with every state's silhouette tinted and overlaid — one pair of feet when aligned.
+
+A warning is fixed where the offset comes from, not in the atlas: a strip whose `kind` is wrong for its motion,
+an effect drawn into the stance frame, a cut whose first frame is not the stance (cut it again from the stance).
 
 ```javascript
 this.load.atlas('frog', 'atlas/frog.png', 'atlas/frog.json');

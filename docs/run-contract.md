@@ -46,7 +46,7 @@ canonical files, not hidden imports.
 | Curate (opt) | `sprite-gen curation` (`serve_curation.py`) + `curation.py` | `frames/` | `curation.json` sidecar |
 | Compose | `compose_sprite_atlas.py` | `frames/` + `curation.json` | `sprite-sheet-alpha.png`, `manifest.json`, `*.report.json` |
 | Engine export (opt) | `sprite-gen export-aseprite` (`sprite_gen/compose/export_aseprite.py`) | composed `manifest.json` + existing atlas | `exports/aseprite.json`, or `exports/aseprite/<state>.json` for Flame |
-| Engine export, video (opt) | `sprite-gen export-phaser` (`sprite_gen/compose/export_phaser.py`) | each `--loop`'s `<item>.strip.json` and the strip PNG beside it | `<out-dir>/<name>.png`, `<name>.json`, `<name>.meta.json`, published together |
+| Engine export, video (opt) | `sprite-gen export-phaser` (`sprite_gen/compose/export_phaser.py`) | each `--loop`'s `<item>.strip.json` and the strip PNG beside it | `<out-dir>/<name>.png`, `<name>.json`, `<name>.meta.json`, `<name>.align.png` (a preview, not loaded), published together |
 | Recolor (opt) | `sprite-gen recolor` / `recolor-palette` (`sprite_gen/effects/recolor.py`) | base sheet (default `sprite-sheet-alpha.png`) + recolor spec | `variants/<name>.png`, optional `variants/<name>.manifest.json`, `variants/recolor.report.json` |
 | QA | `preview_animation.py` | `frames/` | `qa/<state>-contact.png`, `qa/<state>.gif` |
 | Inspect | `inspect_sprite_run.py` | `sprite-request.json`, `raw/` or `frames/` | `sprite-inspect.report.json` |

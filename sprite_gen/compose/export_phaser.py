@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Pack `video-loop` strips into one Phaser character atlas: `<name>.png`, `<name>.json`, `<name>.meta.json`.
+"""Pack `video-loop` strips into one Phaser character atlas: `<name>.png`, `<name>.json`, `<name>.meta.json`
+(and `<name>.align.png`, an alignment preview to look at).
 
 `export-aseprite` describes a composed run (pipeline A). The video pipeline's motions end as one strip per
 state (`<item>.strip.png` + `<item>.strip.json`, one cell size each), which no engine export read. This packs
@@ -32,7 +33,7 @@ from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from sprite_gen._deps import np
 from sprite_gen.spec.runio import atomic_write_set
@@ -45,6 +46,12 @@ ALPHA_FLOOR = 8
 MAX_SIDE = 2048
 """Above this the atlas may not fit an older device's texture limit (4096 is today's common one)."""
 WIDTH_CANDIDATES = (256, 512, 1024, 2048, 4096, 8192)
+ALIGN_TOLERANCE = 0.03
+"""Two states' stances may stand at most this share of the reference stance's height apart (and 2 px) before
+the export warns: past it the body visibly jumps when the animation switches. A periodic loop's stance is its
+stride's mean, not a pose it hands over, so it is given twice that."""
+FEET_BAND = 0.06
+"""The feet are the opaque columns in this share of the stance's height above its lowest row."""
 OUTLIER_SHARE = 0.1
 """At most this share of a loop's frames may reach below the ground the rest stand on (and at least one)."""
 OUTLIER_GAP = 0.08
@@ -210,6 +217,98 @@ def pack(names: list[str], cw: int, ch: int) -> Packed:
     return min(tried, key=lambda p: (max(p.width, p.height) / min(p.width, p.height), p.width * p.height))
 
 
+def _feet(cell: Image.Image) -> tuple[float, int, int] | None:
+    """A frame's feet: the middle of its opaque columns just above its lowest row, that row, and its height."""
+    box = _bbox(cell)
+    if box is None:
+        return None
+    height = box[3] - box[1]
+    band = max(2, round(FEET_BAND * height))
+    cols = np.flatnonzero(_alpha(cell)[max(box[1], box[3] - band):box[3]].any(axis=0))
+    return (float(cols[0] + cols[-1] + 1) / 2, box[3], height)
+
+
+def stance(cells: list[Image.Image], periodic: bool) -> dict[str, float] | None:
+    """Where a state stands in its cell: its feet's middle x, its ground row and its height.
+
+    A periodic loop's feet averaged over its frames on its ground row (as `ground_anchor` reads it); any other
+    state's first frame, which the previous animation hands over to."""
+    feet = [f for f in (_feet(c) for c in cells) if f is not None]
+    if not feet:
+        return None
+    if not periodic:
+        x, ground, height = feet[0]
+        return {"x": x, "ground": float(ground), "height": float(height), "periodic": False}
+    return {"x": sum(f[0] for f in feet) / len(feet),
+            "ground": float(_loop_ground([f[1] for f in feet], [f[2] for f in feet])),
+            "height": float(np.median([f[2] for f in feet])), "periodic": True}
+
+
+def check_alignment(stances: dict[str, dict[str, float] | None],
+                    anchor: tuple[int, int]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Each state's stance against the reference's (`idle` when there is one, else the first state).
+
+    Returns one record per state (its feet x and ground relative to the anchor, its offset from the reference)
+    and a warning for each state standing further from the reference than `ALIGN_TOLERANCE`."""
+    known = {k: v for k, v in stances.items() if v is not None}
+    if not known:
+        return [], []
+    ref = "idle" if "idle" in known else next(iter(known))
+    r = known[ref]
+    records: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for state, st in known.items():
+        dx, dy = st["x"] - r["x"], st["ground"] - r["ground"]
+        tol = max(2.0, ALIGN_TOLERANCE * r["height"]) * (2 if st.get("periodic") or r.get("periodic") else 1)
+        ok = abs(dx) <= tol and abs(dy) <= tol
+        records.append({"state": state, "reference": ref, "feet_x": round(st["x"] - anchor[0], 1),
+                        "ground": round(st["ground"] - anchor[1], 1), "dx": round(dx, 1), "dy": round(dy, 1),
+                        "tolerance": round(tol, 1), "ok": ok})
+        if not ok:
+            warnings.append(f"{state}: its stance stands {dx:+.0f} px across and {dy:+.0f} px down from {ref}'s "
+                            f"(tolerance {tol:.0f} px): the body jumps when the animation switches; look at the "
+                            "alignment preview (<name>.align.png), then at what pulls this state's anchor (an effect, "
+                            "a first frame that is not the stance) - docs/engine-export.md")
+    return records, warnings
+
+
+ALIGN_COLOURS = [(230, 60, 60), (40, 140, 230), (40, 170, 90), (220, 150, 20), (160, 80, 220), (20, 170, 170)]
+
+
+def alignment_preview(atlas: Image.Image, json_hash: dict[str, Any], meta: dict[str, Any]) -> Image.Image:
+    """One panel per state (the frame it starts on) and one with every state's silhouette laid over the others,
+    each with the anchor's crosshair and ground line: a body that jumps between animations shows at a glance."""
+    cw, ch = meta["cell"]
+    ax, ay = meta["anchor"]
+    zoom = max(1, math.ceil(240 / ch))
+    label_h = 18
+    firsts = []
+    for a in meta["anims"]:
+        r = json_hash["frames"][f"{a['prefix']}{0:0{a['zeroPad']}d}"]["frame"]
+        firsts.append((a["key"], atlas.crop((r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"]))))
+    pw, ph = cw * zoom, ch * zoom
+    sheet = Image.new("RGBA", (pw * (len(firsts) + 1), ph + label_h), (238, 238, 238, 255))
+    draw = ImageDraw.Draw(sheet)
+    overlay = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    for i, (key, cell) in enumerate(firsts):
+        sheet.alpha_composite(cell.resize((pw, ph), Image.Resampling.NEAREST), (i * pw, label_h))
+        colour = ALIGN_COLOURS[i % len(ALIGN_COLOURS)]
+        tint = Image.new("RGBA", (cw, ch), (*colour, 255))
+        tint.putalpha(cell.getchannel("A").point(lambda v: 110 if v > ALPHA_FLOOR else 0))
+        overlay.alpha_composite(tint)
+        draw.text((i * pw + 4, 3), key, fill=(*colour, 255))
+    sheet.alpha_composite(overlay.resize((pw, ph), Image.Resampling.NEAREST), (len(firsts) * pw, label_h))
+    draw.text((len(firsts) * pw + 4, 3), "all, overlaid", fill=(30, 30, 30, 255))
+    for i in range(len(firsts) + 1):
+        x0, gx, gy = i * pw, i * pw + ax * zoom + zoom // 2, label_h + ay * zoom
+        draw.line([(x0, gy), (x0 + pw - 1, gy)], fill=(255, 0, 255, 255), width=1)
+        draw.line([(gx, label_h), (gx, label_h + ph - 1)], fill=(255, 0, 255, 255), width=1)
+        draw.line([(gx - 8, gy - 8), (gx + 8, gy + 8)], fill=(0, 0, 0, 255), width=1)
+        draw.line([(gx - 8, gy + 8), (gx + 8, gy - 8)], fill=(0, 0, 0, 255), width=1)
+        draw.line([(x0 + pw - 1, 0), (x0 + pw - 1, label_h + ph)], fill=(160, 160, 160, 255), width=1)
+    return sheet
+
+
 def _zero_pad(count: int) -> int:
     return max(2, len(str(count - 1)))
 
@@ -243,6 +342,7 @@ def build(
     origin = (round(out_anchor[0] / out_cell[0], 6), round(out_anchor[1] / out_cell[1], 6))
 
     frames: dict[str, Image.Image] = {}
+    stances: dict[str, dict[str, float] | None] = {}
     anims: list[dict[str, Any]] = []
     for strip, (ox, oy) in zip(strips, offsets):
         pad = _zero_pad(len(strip.cells))
@@ -251,6 +351,8 @@ def build(
             canvas = Image.new("RGBA", cell, (0, 0, 0, 0))
             canvas.paste(src, (ox, oy))  # onto an empty canvas: a straight copy (a mask would square the alpha)
             frames[f"{prefix}{i:0{pad}d}"] = canvas if scale == 1.0 else _resample(canvas, out_cell)
+        stances[strip.state] = stance([frames[f"{prefix}{i:0{pad}d}"] for i in range(len(strip.cells))],
+                                      strip.periodic)
         anims.append({"key": f"{name}-{strip.state}", "prefix": prefix, "count": len(strip.cells), "zeroPad": pad,
                       "frameRate": round(strip.fps, 3), "repeat": -1 if strip.loop else 0})
 
@@ -289,6 +391,8 @@ def build(
             warnings.append(f"{strip.state}: frame(s) {', '.join(map(str, below))} reach below the ground the other "
                             "frames stand on (an effect drawn under the feet?): left out of the ground line, they "
                             "hang below sprite.y")
+    alignment, misaligned = check_alignment(stances, out_anchor)
+    warnings += misaligned
     if max(packed.width, packed.height) > MAX_SIDE:
         warnings.append(f"atlas {packed.width}x{packed.height} is over {MAX_SIDE}: an older device's texture limit may "
                         "not hold it; give --max-cell (or fewer frames)")
@@ -304,6 +408,7 @@ def build(
         "flip": flip,
         "atlas": [packed.width, packed.height],
         "fill": round(len(names) * w * h / (packed.width * packed.height), 4),
+        "alignment": alignment,
         "warnings": warnings,
     }
     return atlas, json_hash, meta, report
@@ -323,7 +428,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="one per animation: its name and a video-loop folder (or the *.strip.json in it); "
                              "the animation key is NAME-STATE and its frames NAME_STATE_00…")
     parser.add_argument("--name", required=True, help="the texture key and file stem: <name>.png, .json, .meta.json")
-    parser.add_argument("--out-dir", required=True, type=Path, help="where the three files go (e.g. a game's public/atlas)")
+    parser.add_argument("--out-dir", required=True, type=Path,
+                        help="where the three files go (e.g. a game's public/atlas), with <name>.align.png: each "
+                             "state's first frame on the anchor, to look at, not to load")
     parser.add_argument("--flip", action="store_true",
                         help="mirror every frame: for strips facing left in a game whose sprites face right")
     parser.add_argument("--max-cell", type=int, default=0,
@@ -341,8 +448,11 @@ def run(loops: list[tuple[str, Path]], name: str, out_dir: Path, flip: bool = Fa
         out_dir.mkdir(parents=True, exist_ok=True)
         buf = io.BytesIO()
         atlas.save(buf, format="PNG", optimize=True)
-        paths = {kind: out_dir / f"{name}{kind}" for kind in (".png", ".json", ".meta.json")}
+        paths = {kind: out_dir / f"{name}{kind}" for kind in (".png", ".json", ".meta.json", ".align.png")}
+        preview = io.BytesIO()
+        alignment_preview(atlas, json_hash, meta).save(preview, format="PNG")
         atomic_write_set({
+            paths[".align.png"]: preview.getvalue(),
             paths[".png"]: buf.getvalue(),
             paths[".json"]: json.dumps(json_hash, ensure_ascii=False, indent=2) + "\n",
             paths[".meta.json"]: json.dumps(meta, ensure_ascii=False, indent=2) + "\n",

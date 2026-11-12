@@ -114,7 +114,7 @@ front-facing observations also remain unchanged. Mirroring does not preserve lef
 | Uniform background removal or imported sheets | `cutout`, `slice-sheet` | [sheet-slicing](docs/sheet-slicing.md) |
 | Palette swap | `sprite-gen recolor-palette`, `sprite-gen recolor` | [recolor](docs/recolor.md) |
 | Idle breathing as a post-processing layer (the Breathe layer): pixel (default, pixel art) or smooth (large illustrations, video frames: head fixed, chest breathes, shoulders follow; facing values for a turned body); smooth can choose a beat that misses the hands with `--avoid-region`, and a way in or out of a loop carries on its breath with `--loop-cells`, `--start-cell` and `--reference`; pixel can breathe round from the chest with the arms moving sideways (`--chest-round`, `--arms-x`), cells held still (`--hold-mask`), what the arms hold moving whole with them (`--props-mask`), what the arms hold behind the body (a shield hung at the back) moves the same way with the body staying in front (`--props-behind-mask`), and pieces painted one colour move together (`--props-groups colour`, so a sword's reflection follows the sword) | curation sidecar, baked by compose; or `sprite-gen breathe <frames> <out>` on a folder of loop frames | [breathing](docs/breathing.md) |
-| Engine exports | `export-aseprite`, `export-pngs`; `export-phaser` for video-loop strips (one Phaser character atlas: one cell, one feet origin, a meta of animations) | [engine-export](docs/engine-export.md) |
+| Engine exports | `export-aseprite`, `export-pngs`; `export-phaser` for video-loop strips (one Phaser character atlas: one cell, one feet origin, a meta of animations, and an alignment check — see below) | [engine-export](docs/engine-export.md) |
 | Background recipe or repeating tile | existing `gen` / `cutout`, then optional `background-tile` | [asset-tools](docs/asset-tools.md#background-recipe) |
 | Props or icons on a transparent sheet | `slice-sheet --chroma-key none --alpha-floor 64`, props with `--scale sheet --fit contain`, icons with `--fit contain` | [sheet-slicing](docs/sheet-slicing.md#props-and-icons-sheet-scale-and-contain-fit) |
 | Standalone projected shadow | `shadow` | [asset-tools](docs/asset-tools.md#projected-shadows) |
@@ -145,6 +145,21 @@ Scene creation consumes finished assets and remains optional. Asset metadata own
 ## 실행 인터프리터
 
 `SPRITE_GEN_ROOT` is the absolute installed repository path. Use `$SPRITE_GEN_ROOT/.venv/bin/sprite-gen` or `$SPRITE_GEN_ROOT/.venv/bin/python`; do not assume an activated shell. **Windows**: the venv keeps its executables in `.venv/Scripts/`, not `.venv/bin/`; read every `.venv/bin/<tool>` in these docs as `.venv/Scripts/<tool>` (`sprite-gen.exe`, `python.exe`), and the same rule holds there. **폴백 금지**: create a missing venv or report the failure, never use an arbitrary global Python. **NumPy 가 없는 인터프리터** fails at package import. Setup and diagnosis: [interpreter](docs/interpreter.md).
+
+## Alignment before an engine export is delivered
+
+An engine export puts every state on one feet origin, read from the frames' pixels; an effect under the feet,
+a slash reaching forward or a first frame that is not the stance can pull it, and the body then jumps when the
+animation switches. Before handing over an `export-phaser` atlas:
+
+1. Read its report's `alignment` (each state's stance against `idle`'s: `dx`, `dy`, `ok`) and every `warning`;
+   a state with `ok: false` is not delivered as is.
+2. Look at `<name>.align.png` (each state's first frame on the anchor's crosshair and ground line, and all of
+   them overlaid): the silhouettes stand on one pair of feet.
+3. Where a state is off, find what pulls it (its strip's `kind`, an effect, its first frame) and fix it at the
+   stage that made it — the cut, the strip, or the export — never by nudging the atlas by hand; then export again.
+4. Tell the user the alignment result with the delivery (states checked, the largest offset), and that the
+   `.align.png` is for looking at, not for the game to load ([engine-export](docs/engine-export.md#alignment-check)).
 
 ## RIFE for walk and run loops
 

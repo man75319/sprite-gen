@@ -122,14 +122,16 @@ def test_a_strip_png_that_disagrees_with_its_json_is_refused(tmp_path):
         ep.build([("walk", folder)], name="frog")
 
 
-def test_the_cli_writes_the_three_files_together(tmp_path, capsys):
+def test_the_cli_writes_the_three_files_together_with_the_alignment_preview(tmp_path, capsys):
     loops = _set(tmp_path)
     out = tmp_path / "atlas"
     assert ep.run(loops, "frog", out) == 0
-    assert sorted(p.name for p in out.iterdir()) == ["frog.json", "frog.meta.json", "frog.png"]
+    assert sorted(p.name for p in out.iterdir()) == ["frog.align.png", "frog.json", "frog.meta.json", "frog.png"]
     report = json.loads(capsys.readouterr().out)
     with Image.open(out / "frog.png") as im:
         assert list(im.size) == report["atlas"]
+    with Image.open(out / "frog.align.png") as im:  # a panel per state and one overlaid, each a cell wide
+        assert im.width == 3 * report["cell"][0] * max(1, -(-240 // report["cell"][1]))
     assert "export-phaser" in cli.COMMANDS
     assert ep.run(loops, "frog", out, max_cell=-1) == 1
 
@@ -175,3 +177,24 @@ def test_an_attack_looped_from_its_stance_stands_where_its_first_frame_does(tmp_
     assert _feet(frame("wolf_attack_00"), anchor, None) == pytest.approx((0, 0), abs=0.5)
     assert _feet(frame("wolf_attack_07"), anchor, None) == pytest.approx((0, 0), abs=0.5)
     assert [a["repeat"] for a in meta["anims"]] == [-1, -1] and report["warnings"] == []
+
+
+def test_a_state_whose_stance_lands_off_the_idles_is_reported(tmp_path):
+    """An attack whose first frame holds an arm out: its centroid sits toward the arm, so the anchor puts its
+    feet off the idle's. The export warns, naming the state and how far its stance stands from the idle's."""
+    idle = [_blob(200, 100, (80, 40, 120, 90)) for _ in range(4)]
+    armed = _blob(200, 100, (80, 40, 120, 90))
+    armed.paste(Image.new("RGBA", (70, 12), (200, 180, 40, 255)), (10, 40))
+    attack = [armed] + [_blob(200, 100, (80, 40, 120, 90)) for _ in range(3)]
+    loops = [("idle", _strip(tmp_path / "idle", "idle", idle, kind="pinned")),
+             ("attack", _strip(tmp_path / "attack", "attack", attack, kind="fixed"))]
+    _, _, _, report = ep.build(loops, name="wolf")
+    by = {r["state"]: r for r in report["alignment"]}
+    assert by["idle"]["ok"] and by["idle"]["dx"] == 0 and by["idle"]["reference"] == "idle"
+    assert not by["attack"]["ok"] and by["attack"]["dx"] > 10 and by["attack"]["dy"] == 0
+    assert [w for w in report["warnings"] if w.startswith("attack: its stance stands +")]
+
+
+def test_states_standing_on_one_stance_pass_the_alignment_check(tmp_path):
+    _, _, _, report = ep.build(_set(tmp_path), name="frog")
+    assert [(r["state"], r["ok"]) for r in report["alignment"]] == [("walk", True), ("attack", True)]
