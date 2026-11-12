@@ -65,6 +65,24 @@ A whole set (directions x states): `video-set --provider dmx --base side=base.pn
 **480p** (measured 2026-11-11 on the frog: good enough, about half the cost by pixels; ask `--resolution 720p` for
 detail). A walk whose feet float over part of its stride: `--ground-pin on` ([video-pipeline](video-pipeline.md)).
 
+## A short action in a long clip (`--action-seconds`)
+
+Seedance films 4 s at least, and an attack lasts about a second. Pinned to its first frame (the default for an attack),
+the clip struck once and held its impact pose for about a second, which had to be cut out by hand (`video-chain`).
+`--action-seconds STATE=S` gives the length of one motion instead, and the engine works the rest out from the provider:
+
+| | `--action-seconds attack=1`, dmx | `attack=1.5`, dmx | `attack=1`, xai |
+|---|---|---|---|
+| clip (`--duration` wins) | 4 s, Seedance's floor | 4 s | 2 s, two of it |
+| the prompt asks for | 4 in a row | 3 in a row | 2 in a row |
+| pin / cut | none / the loop searched (`periodic`) | same | same |
+
+The built-in attack sentence's phase timings are scaled to add up to S. The count steers the pace; it is not obeyed:
+asked for 3 in 4 s, Seedance gave 4 three times out of three (2026-11-12, crab, English and Chinese), and each cut was a
+whole, closing attack (one strike, or a two-strike combo). The item's record says `action`: `repeats_asked`,
+`repeats_seen` (clip frames over the cut) and `cut_seconds`. Preview without a request:
+`sprite-gen video-prompt --direction side --state attack --provider dmx --action-seconds 1`.
+
 ## The body plan (`--body-plan`): a monster is not a person
 
 sprite-gen's default body is **biped (a person on two feet)**. Its attack sentence says "bare hands only if it holds
@@ -122,6 +140,8 @@ body_plan, description, resolution, key, motions) and `scripts\myautosprite\char
 | `sprite_gen/gen/video.py` | `VideoRequest.provider`, `--provider {xai,dmx}`, `_generate_dmx`, the report's `provider` |
 | `sprite_gen/video/batch.py` | `video-set --provider/--model`, the 4 s floor for dmx, `--ground-pin` |
 | `sprite_gen/video/loop.py` | `video-loop --ground-pin` |
+| `sprite_gen/video/batch.py`, `clip_prompt.py` | `--action-seconds`: a motion's own length, the clip and the count worked out from the provider's shortest clip |
+| `sprite_gen/video/nonloop.py` | a death or fall no longer has to end lower than it stood (a crab on its back is taller); its end pose only has to differ from its first |
 | `sprite_gen/compose/export_phaser.py` | the feet origin read per kind of loop, the alignment check and `<name>.align.png` |
 | `sprite_gen/util/env_file.py` | **New**: the checkout's `.env` and `.tools` read on start |
 | `sprite_gen/util/cli_kwargs.py` | fix: `--audio/--no-audio` sharing a dest overwritten by its default |

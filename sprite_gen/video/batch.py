@@ -16,6 +16,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
+import re
 import sys
 import threading
 import time
@@ -74,6 +76,43 @@ ACTION_TEXT_STATES = frozenset({"attack"})
 def duration_for(state: str, requested: int | None) -> int:
     """Seconds to ask for: an explicit request wins, otherwise the state's own default."""
     return requested if requested is not None else STATE_DURATION_SECONDS.get(state, DEFAULT_DURATION_SECONDS)
+
+
+# The shortest clip each clip provider films (`video --provider`): Grok Imagine 1 s, Doubao Seedance 4 s.
+CLIP_DURATION_MIN = {"xai": 1, "dmx": 4}
+# A motion asked for at its own length (`--action-seconds`) is filmed as a repeat, unpinned, and its loop searched:
+# the search needs two of it at least to find one, and a clip longer than one action is filled by repeating it, not by
+# slowing it down or holding a pose (Seedance, 2026-11-12: a 4 s attack pinned to its first frame struck once and held
+# its impact pose about a second; asked to repeat, it struck about once a second and the cut was one strike).
+ACTION_REPEATS_MIN = 2
+ACTION_REPEAT_TEXT = "It does this {n} times in a row, returning to its ready pose after each one."
+
+
+_TIMING = re.compile(r"about (\d+(?:\.\d+)?) s\b")
+
+
+def scale_timings(sentence: str, seconds: float) -> str:
+    """A built-in sentence's phase timings ("a windup (about 0.5 s), ...") scaled so they add up to one motion of
+    `seconds` (`--action-seconds`): left as written, they would ask one motion to last as long as they say while the
+    repeat asks it to fit the clip, the contradiction a model resolves on its own."""
+    found = [float(m) for m in _TIMING.findall(sentence)]
+    if not found or sum(found) <= 0:
+        return sentence
+    factor = seconds / sum(found)
+    return _TIMING.sub(lambda m: f"about {float(m.group(1)) * factor:.2f}".rstrip("0").rstrip(".") + " s", sentence)
+
+
+def action_plan(seconds: float, requested: int | None, provider: str | None) -> dict[str, Any]:
+    """A motion's own length (`--action-seconds`) turned into the clip that films it: the clip is the duration asked for
+    (`requested`) or else the least that holds two of it and that the provider films (`CLIP_DURATION_MIN`), and the
+    prompt asks for as many of it as fill that clip. A video model counts loosely (asked for 3 in 4 s, Seedance gave 4),
+    so the count steers the pace, and the cut is the loop the clip shows (`repeats_seen` in the item's record)."""
+    if not seconds > 0:
+        raise SystemExit(f"video-set: --action-seconds must be over 0, got {seconds:g}")
+    floor = CLIP_DURATION_MIN.get(provider or "xai", 1)
+    duration = requested if requested is not None else max(floor, math.ceil(seconds * ACTION_REPEATS_MIN))
+    repeats = max(ACTION_REPEATS_MIN, round(duration / seconds))
+    return {"seconds": seconds, "duration": duration, "clip_min": floor, "repeats_asked": repeats}
 VIEW_TEXT = {
     "side": "seen from the exact side, facing {facing}",
     "front": "seen from the front, facing the viewer directly",
@@ -459,7 +498,8 @@ def build_prompt(direction: str, state: str, character: str | None, facing: str 
 def clip_prompt_parts(direction: str, state: str, character: str | None, facing: str = "right", motion: str | None = None,
                       pinned: bool | None = None, model: str | None = None,
                       handed: list[Handed] | None = None, body_plan: list[Body] | None = None,
-                      play: str | None = None) -> prompt_parts.Prompt:
+                      play: str | None = None, repeats: int | None = None,
+                      action_seconds: float | None = None) -> prompt_parts.Prompt:
     """The clip prompt for one (direction, state), as its pieces (`prompt_parts.Prompt`: `.text` is the
     prompt, `.notes` what the caller's own words say against or again after the engine's).
 
@@ -526,6 +566,8 @@ def clip_prompt_parts(direction: str, state: str, character: str | None, facing:
         if state in GAIT_STATES and direction in GAIT_HOLD_TEXT:
             hold += f" {GAIT_HOLD_TEXT[direction].format(facing=facing)}"
         repeat = f" {REPEAT_TEXT[state]}" if state in REPEAT_TEXT else ""
+        if repeats is not None:
+            repeat += f" {ACTION_REPEAT_TEXT.format(n=repeats)}"
         if mode == play_mod.ONCE_RETURN:
             repeat += f" {RETURN_TEXT}"
         subject = character.strip().rstrip(".") if character else "The character"
@@ -539,6 +581,10 @@ def clip_prompt_parts(direction: str, state: str, character: str | None, facing:
                     else ATTACK_TEXT_ANY_BODY if state == "attack" and not body_mod.biped(body_plan)
                     else nonloop.MOTION_TEXT[state] if state in nonloop.STATES
                     else MOTION_TEXT.get(state, PLAY_TEXT[play_mod.LOOP].format(state=state)))
+        if action_seconds is not None:
+            built_in = scale_timings(built_in, action_seconds)
+        if repeats is not None:
+            built_in += f" {ACTION_REPEAT_TEXT.format(n=repeats)}"
         text = template.format(motion=built_in + stands_on, view=view)
         text = ((text.replace("The character", character, 1) if character else text)
                 + _lite_text(state, direction, model, built_in=True, body_plan=body_plan))
@@ -747,10 +793,20 @@ def run_item(
     air_retime: str | None = None,
     meters_per_px: float | None = None,
     ground_pin: str = "off",
+    action_seconds: float | None = None,
+    clip_provider: str | None = None,
 ) -> dict[str, Any]:
-    """One (direction, state) item, canvas to loop. `play` is the request's play mode for it (`play.MODES`; None, the
+    """One (direction, state) item, canvas to loop. `action_seconds` is the length of one of its motion
+    (`action_plan`): the clip is filmed as a repeat of it, unpinned, and its loop searched. `play` is the request's play mode for it (`play.MODES`; None, the
     state's preset) and `motion` the caller's own motion text in place of the state's sentence. `anchor` is the
     request's `--anchor`; None cuts the loop with the item's own (`anchor_for`)."""
+    action = None
+    if action_seconds is not None:
+        if play not in (None, play_mod.LOOP):
+            raise SystemExit(f"video-set: --action-seconds films {state} as a loop; it cannot go with --play {play}")
+        play = play_mod.LOOP
+        action = action_plan(action_seconds, duration, clip_provider)
+        duration = action["duration"]
     mode = play_mod.resolve(state, play, prog="video-set")
     if end_frame is not None and mode != play_mod.ONCE_HOLD:
         raise SystemExit("video-set: --end-frame requires a once-hold item (a non-loop state, or --play once-hold)")
@@ -773,12 +829,14 @@ def run_item(
     if motion is not None:
         result["motion"] = motion
     lifetime = mode == play_mod.LIFETIME
-    pins = pins_last_frame(state, direction, play)
+    pins = pins_last_frame(state, direction, play) and action is None
+    if action is not None:
+        result["action"] = action
     if direction in handed_mod.LATERAL_VIEWS:
         result["turned"] = facing
     try:
         parts = clip_prompt_parts(direction, state, character, facing=facing, motion=motion, handed=handed,
-                                  body_plan=body_plan, play=play)
+                                  body_plan=body_plan, play=play, **({"pinned": False, "repeats": action["repeats_asked"], "action_seconds": action["seconds"]} if action else {}))
         prompt = parts.text
         if parts.notes:
             result["prompt_notes"] = parts.notes
@@ -892,6 +950,10 @@ def run_item(
                                fill_held=fill_held, out_fps=out_fps, air_retime=air_retime, meters_per_px=meters_per_px,
                                ground_pin=ground_pin if state == GROUND_PIN_STATE else "off")
         result["loop"] = loop_summary(lp)
+        if action is not None and lp["cycle"].get("length"):
+            # how many of the motion the clip holds, read off the loop it was cut to (the model counts loosely)
+            action["repeats_seen"] = round(float(fr["frames"]) / float(lp["cycle"]["length"]), 1)
+            action["cut_seconds"] = round(float(lp["cycle"]["length"]) / float(fr["fps"]), 2)
         result["ok"] = True
     except CodexUnavailableAsk as exc:
         result["ok"] = False
@@ -1206,6 +1268,8 @@ def run_set(
     root: Path,
     character: str | None,
     duration: int | None,
+    action_seconds: dict[str, float] | None = None,
+    duration_requested: int | None = None,
     resolution: str,
     key: str,
     concurrency: int,
@@ -1270,6 +1334,11 @@ def run_set(
     items = [(f"{d}-{f}-{s}" if both and f else f"{d}-{s}", d, s, f or facings[0], b) for d, f, b in views for s in states]
     plays = item_values(play or {}, items, "--play")
     motions = item_values(motion or {}, items, "--motion")
+    actions = {i: float(v) for i, v in item_values({k: str(v) for k, v in (action_seconds or {}).items()}, items, "--action-seconds").items()}
+    for i in actions:
+        if plays.get(i) not in (None, play_mod.LOOP):
+            raise SystemExit(f"video-set: --action-seconds films {i} as a loop; it cannot go with --play {plays[i]}")
+        plays[i] = play_mod.LOOP
     modes = {i: play_mod.resolve(s, plays.get(i), prog="video-set") for i, _, s, _, _ in items}
     for item, path in (end_frames or {}).items():
         if item not in modes or modes[item] != play_mod.ONCE_HOLD or not path.is_file():
@@ -1306,7 +1375,7 @@ def run_set(
         return prepare_side
 
     with ThreadPoolExecutor(max_workers=max(1, concurrency)) as ex:
-        futures = {ex.submit(run_item, item=i, direction=d, state=s, base=b, root=root, character=character, duration=duration, resolution=resolution, key=key, force=force, gap=gap, video_runner=video_runner, shape=shape, anchor=anchor, spill=spill, facing=f, facing_fix=facing_fix, prepare_side=side_preparer(f), body_height=body_height, fit=fit, decontam=decontam, walk_start=walk_start, redraw_runner=redraw_runner, still_provider=still_provider, handed=handed, body_plan=body_plan, **({"end_frame": end_frames[i]} if end_frames and i in end_frames else {}), **({"play": plays[i]} if i in plays else {}), **({"motion": motions[i]} if i in motions else {}), fill_held="off" if i in aligned_items else fill_held, out_fps=None if i in aligned_items else out_fps, air_retime=air_retime, meters_per_px=meters_per_px, ground_pin=ground_pin): i for i, d, s, f, b in items}
+        futures = {ex.submit(run_item, item=i, direction=d, state=s, base=b, root=root, character=character, duration=duration_requested if i in actions else duration, resolution=resolution, key=key, force=force, gap=gap, video_runner=video_runner, shape=shape, anchor=anchor, spill=spill, facing=f, facing_fix=facing_fix, prepare_side=side_preparer(f), body_height=body_height, fit=fit, decontam=decontam, walk_start=walk_start, redraw_runner=redraw_runner, still_provider=still_provider, handed=handed, body_plan=body_plan, **({"end_frame": end_frames[i]} if end_frames and i in end_frames else {}), **({"play": plays[i]} if i in plays else {}), **({"motion": motions[i]} if i in motions else {}), **({"action_seconds": actions[i], "clip_provider": CLIP_PROVIDER} if i in actions else {}), fill_held="off" if i in aligned_items else fill_held, out_fps=None if i in aligned_items else out_fps, air_retime=air_retime, meters_per_px=meters_per_px, ground_pin=ground_pin): i for i, d, s, f, b in items}
         for fut in as_completed(futures):
             r = fut.result()
             results.append(r)
@@ -1410,6 +1479,20 @@ def _parse_keyed(values: list[str], flag: str) -> dict[str, str]:
     return result
 
 
+def _parse_seconds(values: list[str]) -> dict[str, float]:
+    """`--action-seconds`: STATE=S or ITEM=S, each key once, S a number of seconds over 0."""
+    out: dict[str, float] = {}
+    for key, text in _parse_keyed(values, "--action-seconds").items():
+        try:
+            seconds = float(text)
+        except ValueError:
+            raise SystemExit(f"video-set: --action-seconds {key}={text}: not a number of seconds") from None
+        if not seconds > 0:
+            raise SystemExit(f"video-set: --action-seconds {key}={text}: must be over 0")
+        out[key] = seconds
+    return out
+
+
 def _parse_end_frames(values: list[str]) -> dict[str, Path]:
     result = {}
     for value in values:
@@ -1433,6 +1516,12 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                              "(repeatable; an item's own wins). Without it a named state plays as its preset and any other "
                              "word as a loop; with it the clip's end-frame pin, the prompt's ending, the cut and the strip's "
                              "loop/hold_last/returns follow the mode")
+    parser.add_argument("--action-seconds", action="append", default=[], metavar="STATE=S | ITEM=S",
+                        help="how long one of a state's motion lasts, in seconds, e.g. 'attack=1' (repeatable; an item's "
+                             "own wins): the state is filmed as a repeat of it, unpinned, in a clip of the least length "
+                             "the provider films that holds two of it (Seedance 4 s, Grok 1 s; --duration wins), the "
+                             "prompt asks for as many as fill the clip, and the loop the clip shows is cut "
+                             "(the record's `action`: repeats asked and seen)")
     parser.add_argument("--motion", action="append", default=[], metavar="STATE=TEXT | ITEM=TEXT",
                         help="your own motion text for a state of the set (every view of it) or one item, in place of the "
                              "state's sentence, written as whole sentences about the subject, e.g. "
@@ -1490,6 +1579,7 @@ def run(**kwargs: object) -> int:
     CLIP_PROVIDER = str(kwargs["provider"]) if kwargs.get("provider") else None
     CLIP_MODEL = str(kwargs["model"]) if kwargs.get("model") else None
     duration = int(kwargs["duration"]) if kwargs.get("duration") else None
+    duration_requested = duration
     if CLIP_PROVIDER == "dmx" and duration is None:
         # Seedance's own floor is 4 s (its per-state defaults here are 3 and 2): one value for every state keeps the
         # set's clips comparable, and `--duration` still wins.
@@ -1512,6 +1602,7 @@ def run(**kwargs: object) -> int:
         body_plan=body_mod.parse_all(list(kwargs.get("body_plan") or [])) or None,  # type: ignore[arg-type]
         play=_parse_keyed(list(kwargs.get("play") or []), "--play") or None,  # type: ignore[arg-type]
         motion=_parse_keyed(list(kwargs.get("motion") or []), "--motion") or None,  # type: ignore[arg-type]
+        action_seconds=_parse_seconds(list(kwargs.get("action_seconds") or [])) or None, duration_requested=duration_requested,
         fill_held=str(kwargs.get("fill_held") or "auto"), out_fps=kwargs.get("out_fps"),  # type: ignore[arg-type]
         air_retime=kwargs.get("air_retime"), meters_per_px=kwargs.get("meters_per_px"),  # type: ignore[arg-type]
         ground_pin=str(kwargs.get("ground_pin") or "off"),

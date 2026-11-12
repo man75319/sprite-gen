@@ -46,7 +46,8 @@ def plan_prompt(*, direction: str, state: str, facing: str = "right", character:
                 motion: str | None = None, model: str = DEFAULT_MODEL, last_frame: bool = True,
                 unpinned: bool = False, duration: int | None = None, key: str = GREEN,
                 handed: list[Handed] | None = None, body_plan: list[Body] | None = None, end_frame: Path | None = None,
-                play: str | None = None) -> dict[str, Any]:
+                play: str | None = None, action_seconds: float | None = None,
+                provider: str | None = None) -> dict[str, Any]:
     """The prompt `video-set` would send for (direction, state), and how its clip is to be cut. `handed`
     (`handedness.parse`) adds where each asymmetric item is in this view, as `video-set --handed` does;
     `body_plan` (`body_plan.parse_all`) what the subject stands on, as `video-set --body-plan` does; `play` the play
@@ -57,6 +58,14 @@ def plan_prompt(*, direction: str, state: str, facing: str = "right", character:
         raise SystemExit(f"video-prompt: --key must be one of {', '.join(START_STILL_KEYS)}, got {key!r}")
     if unpinned and last_frame:
         raise SystemExit("video-prompt: --unpinned goes with --no-last-frame (a source that can pin the end frame films it pinned)")
+    action = None
+    if action_seconds is not None:
+        # filmed as a repeat of one motion of this length, unpinned, its loop searched (`batch.action_plan`)
+        if play not in (None, play_mod.LOOP):
+            raise SystemExit(f"video-prompt: --action-seconds films the motion as a loop; it cannot go with --play {play}")
+        play = play_mod.LOOP
+        action = batch_mod.action_plan(action_seconds, duration, provider)
+        duration = action["duration"]
     mode = play_mod.resolve(state, play, prog="video-prompt")
     lifetime = mode == play_mod.LIFETIME
     if end_frame is not None:
@@ -64,7 +73,7 @@ def plan_prompt(*, direction: str, state: str, facing: str = "right", character:
             raise SystemExit("video-prompt: --end-frame requires a once-hold motion (a non-loop state, or --play once-hold)")
         if not last_frame:
             raise SystemExit("video-prompt: this source cannot pin an end frame")
-    wants_pin = batch_mod.pins_last_frame(state, direction, play)
+    wants_pin = batch_mod.pins_last_frame(state, direction, play) and action is None
     if lifetime and not last_frame:
         raise SystemExit("video-prompt: an effect requires an empty black end-frame pin; this source cannot pin it")
     warnings: list[str] = []
@@ -80,8 +89,11 @@ def plan_prompt(*, direction: str, state: str, facing: str = "right", character:
         cut = "loop" if mode == play_mod.LOOP else "return"
         warnings.append(f"{direction} {state} filmed without its end-frame pin: the {cut} is searched, not cut whole, and may not close")
     pins = wants_pin and last_frame
+    if action is not None:
+        pinned = False
     parts = batch_mod.clip_prompt_parts(direction, state, character, facing=facing, motion=motion, pinned=pinned,
-                                        model=model, handed=handed, body_plan=body_plan, play=play)
+                                        model=model, handed=handed, body_plan=body_plan, play=play,
+                                        **({"repeats": action["repeats_asked"], "action_seconds": action["seconds"]} if action else {}))
     prompt = parts.text
     # the caller's own words (--character, --motion) against the engine's: a conflict is a warning
     warnings += [note["text"] for note in parts.notes if note["kind"] == prompt_parts.CONFLICT]
@@ -112,6 +124,7 @@ def plan_prompt(*, direction: str, state: str, facing: str = "right", character:
             "frames": "sprite-gen video-frames --clip <dir>/clip.mp4 --out-dir <dir>/frames --spill auto --reference <dir>/canvas.png",
             "loop": f"sprite-gen video-loop --frames-dir <dir>/frames/keyed --out-dir <dir>/loop --fps <fps in frames.report.json> --state {state} --cycle {cycle} --facing {loop_facing} --name {direction}-{state}",
         },
+        **({"action": action} if action else {}),
         "warnings": warnings,
         **({"notes": parts.notes} if parts.notes else {}),
     }
@@ -142,6 +155,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--play", choices=play_mod.MODES, help="how the motion plays (default: the state's preset; a word that is no named state, a loop): the end-frame pin, the prompt's ending and the video-loop --cycle follow it, as video-set --play")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"clip model the prompt is for (default {DEFAULT_MODEL}); a Lite model calms a walk")
     parser.add_argument("--duration", type=int, help="seconds to ask for (default: the state's own, as video-set)")
+    parser.add_argument("--action-seconds", type=float, help="how long one of the motion lasts, as video-set --action-seconds: filmed as a repeat of it, unpinned, the clip the least the provider films that holds two of it")
+    parser.add_argument("--provider", choices=sorted(batch_mod.CLIP_DURATION_MIN), help="the clip provider, for --action-seconds: its shortest clip (Seedance 4 s, Grok 1 s)")
     parser.add_argument("--end-frame", type=Path, help="non-loop terminal-pose canvas to pin instead of returning to the starting image")
     parser.add_argument("--no-last-frame", action="store_true", help="the clip source cannot pin an end frame (ZCRE's grok-imagine-video-1.5): states filmed pinned are refused")
     parser.add_argument("--unpinned", action="store_true", help="with --no-last-frame: film a pinned state without the pin, with a warning, instead of refusing it")
@@ -157,6 +172,7 @@ def run(**kwargs: object) -> int:
         model=str(kwargs.get("model") or DEFAULT_MODEL), last_frame=not kwargs.get("no_last_frame"),
         unpinned=bool(kwargs.get("unpinned")), duration=(int(kwargs["duration"]) if kwargs.get("duration") else None),  # type: ignore[arg-type]
         key=str(kwargs.get("key") or GREEN),
+        action_seconds=kwargs.get("action_seconds"), provider=kwargs.get("provider"),  # type: ignore[arg-type]
         handed=handed_mod.parse_all(list(kwargs.get("handed") or [])) or None,  # type: ignore[arg-type]
         body_plan=body_mod.parse_all(list(kwargs.get("body_plan") or [])) or None,  # type: ignore[arg-type]
     )
