@@ -496,6 +496,20 @@ The cut's seam and step count are measured on the held frames. A fixed cut is he
 
 Passing `--size-hold off` on a fixed cut keeps the filmed frames pixel for pixel and records `size_hold: {"applied": false, "why": "--size-hold off"}`. Under `--anchor motion-auto`, `--size-hold off` searches the filmed frames first, but if the first search finds no cycle, the gait fallback still scales back a size change of 3 % or more with feet left where filmed and searches again.
 
+**A walk's feet stand on one ground line with `--ground-pin on`** (walk only; off by default). A video model
+asked to walk in place sometimes keeps the torso level while the legs bend and straighten: the foot the body
+stands on rises and falls with the stride, and in part of the cycle both feet hang over the ground (measured
+2026-11-12 on two Seedance takes of one character: the lowest solid row of the cut moved 27 and 29 px over a
+404 px body, 7 %). The motion anchor reads the body and `--anchor feet` the drift across; neither reads the
+ground. Under `--ground-pin on`, after the jump repair and before anything reads the loop as it plays (the jolt,
+the part pop, the held cells filled again, the frames between at `--out-fps`), each frame of the cut is moved up,
+whole, so its lowest solid row (3 or more opaque pixels, so a speck does not count) stands on the highest of the
+cut's lowest rows. Nothing is redrawn. The body then bobs with the stride instead (on the take above: the feet's
+spread 29 px to 2 px, the head's 15 px to 33 px). The report's and strip's `ground_pin` record the ground row,
+the spread before, and each cut frame's move (`cut_dy_px`). A run is never pinned: its air is its own.
+`video-set --ground-pin on` passes it to each walk's cut; a walk the cycle alignment cuts again
+(`video-cycle-align`) is not pinned yet, and the set says so in a warning line.
+
 **A lead-in is left out of the search** (walk and run, `--cycle auto` or `periodic`). A video
 model may reframe a small subject in a clip's first frames: the body grows (or shrinks) by a third
 or more in under half a second, then walks at its new size. What it finds, and what it refuses, is said in the clip's own frame numbers:

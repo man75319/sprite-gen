@@ -768,6 +768,48 @@ def ramp_frames(frames: list[Image.Image], wrap_dx: int) -> list[Image.Image]:
     return out
 
 
+GROUND_PIN_MODES = ("off", "on")
+
+
+def _moved_by(frame: Image.Image, dy: int) -> Image.Image:
+    if dy == 0:
+        return frame
+    canvas = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+    canvas.paste(frame, (0, dy))
+    return canvas
+GROUND_PIN_ROW_PX = 3
+"""A row is solid when at least this many of its pixels are (a stray speck under the feet does not count)."""
+
+
+def lowest_solid_row(image: Image.Image) -> int | None:
+    """The lowest row of a frame holding `GROUND_PIN_ROW_PX` or more opaque pixels."""
+    alpha = np.asarray(image.getchannel("A")) > 127
+    rows = np.flatnonzero(alpha.sum(axis=1) >= GROUND_PIN_ROW_PX)
+    return int(rows[-1]) if rows.size else None
+
+
+def ground_pin_frames(frames: list[Image.Image]) -> tuple[list[Image.Image], dict[str, Any]]:
+    """Each frame of a cut moved up or down, whole, so its lowest solid row stands on one ground line (`--ground-pin on`).
+
+    A walk filmed with its torso level and its legs bending leaves the foot it stands on rising and falling with the
+    stride, and the body floats over the ground in half its frames; the cut's own corrections (`--anchor`) read the
+    body or the drift across, never the ground. Each frame moves by whole pixels, nothing redrawn: the ground line is the
+    highest of the frames' lowest rows, so a frame only ever moves up (the canvas's room above the head is wider than
+    under the feet). Where the walk's feet both leave the ground (a run's air) this pins the air down too: walk only."""
+    rows = [lowest_solid_row(f) for f in frames]
+    known = [r for r in rows if r is not None]
+    if not known:
+        return frames, {"applied": False, "why": "no frame has a solid row"}
+    ground = min(known)
+    moved: list[Image.Image] = []
+    dys: list[int] = []
+    for frame, row in zip(frames, rows):
+        dy = 0 if row is None else ground - row
+        dys.append(dy)
+        moved.append(_moved_by(frame, dy))
+    return moved, {"applied": True, "ground_row": ground, "dy_px": dys, "spread_px": max(known) - min(known)}
+
+
 def standing_height(path: Path, frame: int = 0) -> int:
     """The subject's height in clip frame `frame`: the clip's first frame, the base still's pose as filmed.
 
@@ -2548,8 +2590,11 @@ def _cut_loop(
     air_retime: str | None = None,
     meters_per_px: float | None = None,
     contacts: list[str] | None = None,
+    ground_pin: str = "off",
 ) -> dict[str, Any]:
     state = state.strip().lower() if state else state
+    if ground_pin not in GROUND_PIN_MODES:
+        raise SystemExit(f"video-loop: unknown --ground-pin {ground_pin!r}; expected one of {', '.join(GROUND_PIN_MODES)}")
     if state == effect.STATE:
         if cycle_mode == "auto":
             cycle_mode = "lifetime"
@@ -2684,7 +2729,7 @@ def _cut_loop(
                      "size_hold": size_hold, "steps": steps, "overlap_wrap": overlap_wrap, "wrap_blend": wrap_blend,
                      "unfixed": unfixed, "seam_pop_max": seam_pop_max, "view": view, "body_turn": body_turn,
                      "fill_held": fill_held, "out_fps": out_fps, "air_retime": air_retime, "meters_per_px": meters_per_px,
-                     "contacts": list(contacts) if contacts is not None else None},
+                     "contacts": list(contacts) if contacts is not None else None, "ground_pin": ground_pin},
     }
     if lead is not None:
         # `search_from`: the first clip frame the search read (0: the whole clip, or a cut the caller named).
@@ -3095,6 +3140,17 @@ def _cut_loop(
             print(f"video-loop: warning: {line}", file=sys.stderr)
     else:
         report_base["jump_repair"] = {"applied": False, "why": "--repair off" if repair == "off" else f"not a gait state ({state})"}
+    pinned: dict[str, Any] | None = None
+    if ground_pin == "on":
+        # After the jump repair, before anything reads the loop as it plays (the jolt, the part pop, the held cells
+        # filled again, the frames between at --out-fps): each frame stands on one ground line, moved whole.
+        frames, pinned = ground_pin_frames(frames)
+        if pinned.get("applied"):
+            dys = pinned["dy_px"]
+            as_filmed = {k: _moved_by(f, dys[k]) for k, f in as_filmed.items()}
+            if prof.gait:
+                cut_frames = [_moved_by(f, dy) for f, dy in zip(cut_frames, dys)]  # the part pop compares like with like
+        report_base["ground_pin"] = {k: v for k, v in pinned.items() if k != "dy_px"}
     if prof.gait:
         # The jolt is measured on the loop as it will play — after the repair — and reported on
         # every walk and run (docs/loop-repair.md section 3). Beyond the reference bounds it is a
@@ -3325,6 +3381,10 @@ def _cut_loop(
     for key in ("ghost_given_way", "ghost_kept"):
         if report_base.get(key):
             strip_meta[key] = report_base[key]
+    if pinned is not None and pinned.get("applied"):
+        # How far each cell was moved down (negative: up) to stand on the ground line, after its other moves.
+        strip_meta["ground_pin"] = {"ground_row": pinned["ground_row"], "spread_px": pinned["spread_px"],
+                                    "cut_dy_px": pinned["dy_px"]}
     if report_base.get("wrap_blend", {}).get("applied"):
         # The cells the wrap blend changed: they are no longer the cut's frames as filmed.
         strip_meta["wrap_blend"] = {k: report_base["wrap_blend"][k] for k in ("cells", "K")}
@@ -3583,6 +3643,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--repair", choices=REPAIR_MODES, default="auto", help="auto (default): take out the frames off the walk's flow (one or two drawings that lie 3x their region's usual step off the line between the frames either side) and make them again with RIFE between those frames, each at its own time, so the loop keeps its length; adopt only without smear/outline faults, at most 3 calls and never made from or beside a frame made (docs/loop-repair.md section 2). A rejected group keeps its frames. A loop that is not a walk or run is not read for its flow: where its wrap steps over --seam-max times the mean of the three steps either side, one, two or four frames round it are made again by RIFE between the frames either side, the fewest first, taken only without faults and where every step from one to the other then reads within that limit (docs/loop-repair.md section 2, \"The seam bridge\"). Missing RIFE keeps the filmed loop with a warning (`sprite-gen rife install`); on: the same repair, but no RIFE fails the loop; off: cut as filmed")
     parser.add_argument("--overlap-wrap", choices=OVERLAP_WRAP_MODES, default="on", help="--anchor motion-auto, under --repair auto or on: on (default): a cut two steps long whose wrap a part on its own beat leaves open (the seam gate refuses it) has four to twelve frames beside its wrap made again between the clip's frames a cycle apart and its own, each read with RIFE's single passes for a part torn — 34 calls of the binary a frame, up to forty frames (docs/loop-repair.md section 2, \"The overlapped wrap\"); off: not tried, recorded `wrap_overlap.skipped` with a warning line, and the gate refuses the cut as filmed — for a host whose RIFE runs on a CPU, where one frame of a 960 px clip takes minutes")
     parser.add_argument("--wrap-blend", choices=wrap_blend_mod.MODES, default="auto", help="--cycle pinned with --anchor none: auto (default): where the pinned last frame draws the first again (the first frame and it differ by more than --seam-max times the cut's median step, at full size), the last half second of the cut takes the first frame's drawing back in a ramp, only where the two ends differ by a redraw and the cell stands where the pin stands; a ramp that steps more than the cut already does, or does not shrink the wrap, is not used and a warning line says so (report `wrap_blend`, docs/loop-repair.md section 6); off: the cut as filmed")
+    parser.add_argument("--ground-pin", choices=GROUND_PIN_MODES, default="off", help="walk: on: after every repair, each frame of the cut is moved up, whole, so its lowest solid row stands on one ground line — for a walk filmed with its torso level whose feet float over the ground in part of its stride; the body then bobs with the stride instead (strip `ground_pin`: each cell's move); not for a run, whose air it would pin down; off (default): the cut as aligned")
     parser.add_argument("--unfixed", choices=UNFIXED_MODES, default="warn", help="walk/run: a frame the jump repair leaves off the walk's flow (under --repair auto or on) — no group of up to two drawings brings it back, or the group that would was refused (its RIFE frame had a fault) — is recorded in jump_repair.unfixed; a part the size of a hand or a foot that pops at the wrap of the cut taken — the cut kept as cut — in part_pop.left, a take to film again (retake, reason part-pop; docs/loop-repair.md section 2, \"The part pop\"); warn (default): a warning line, the loop kept; refuse: the loop fails")
     parser.add_argument("--jolt-max", type=float, default=None, help=f"walk/run: fail the repaired loop when its jolt index (how far each step strays from its neighbours' mean, over the median step) exceeds this. Default: no gate — the index is reported and a value over {repair_mod.JOLT_REFERENCE} is a warning line")
     parser.add_argument("--head-step-max", type=float, default=None, help=f"walk/run: fail the repaired loop when the head's largest sideways move in one frame exceeds this %% of the body height. Default: no gate — reported, and over {repair_mod.HEAD_STEP_REFERENCE} is a warning line")
@@ -3671,7 +3732,7 @@ def run(**kwargs: object) -> int:
         jolt_max=kwargs.get("jolt_max"), head_step_max=kwargs.get("head_step_max"),  # type: ignore[arg-type]
         size_hold=str(kwargs.get("size_hold") or "auto"), steps=kwargs.get("steps"),  # type: ignore[arg-type]
         overlap_wrap=str(kwargs.get("overlap_wrap") or "on"), wrap_blend=str(kwargs.get("wrap_blend") or "auto"),
-        unfixed=str(kwargs.get("unfixed") or "warn"),
+        unfixed=str(kwargs.get("unfixed") or "warn"), ground_pin=str(kwargs.get("ground_pin") or "off"),
         seam_pop_max=kwargs.get("seam_pop_max", repair_mod.SEAM_POP_REFERENCE),  # type: ignore[arg-type]
         view=kwargs.get("view"),  # type: ignore[arg-type]
         body_turn=str(kwargs.get("body_turn") or "warn"),

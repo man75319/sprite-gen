@@ -746,6 +746,7 @@ def run_item(
     out_fps: float | None = None,
     air_retime: str | None = None,
     meters_per_px: float | None = None,
+    ground_pin: str = "off",
 ) -> dict[str, Any]:
     """One (direction, state) item, canvas to loop. `play` is the request's play mode for it (`play.MODES`; None, the
     state's preset) and `motion` the caller's own motion text in place of the state's sentence. `anchor` is the
@@ -888,7 +889,8 @@ def run_item(
         lp = loop_mod.run_loop(Path(fr["keyed_dir"]), item_dir / "loop", fps=float(fr["fps"]), state=state, min_len=None, max_len=None, n_out=None, seam_max=loop_mod.SEAM_RATIO_MAX, name=item, report_path=item_dir / "loop.report.json", anchor=anchor_for(state, cut, anchor), body_height=body_height,
                                cycle_mode=cut,
                                facing=facing if direction in handed_mod.LATERAL_VIEWS else "right", view=direction,
-                               fill_held=fill_held, out_fps=out_fps, air_retime=air_retime, meters_per_px=meters_per_px)
+                               fill_held=fill_held, out_fps=out_fps, air_retime=air_retime, meters_per_px=meters_per_px,
+                               ground_pin=ground_pin if state == GROUND_PIN_STATE else "off")
         result["loop"] = loop_summary(lp)
         result["ok"] = True
     except CodexUnavailableAsk as exc:
@@ -1030,6 +1032,10 @@ def left_out_why(reasons: list[str], *, stands: bool = False, one_step: bool = F
                            "where its strip counts two steps, and aligned as one cycle it would play twice as fast"]
                           if local_cycle.FOUR_STEPS in reasons else [])])
     return why + ("; its step screen says it may be one step (cut it again with video-loop --steps 1 if it is)" if one_step else "")
+
+
+GROUND_PIN_STATE = "walk"
+"""The state `--ground-pin on` pins: a walk always has a foot on the ground; a run's air is its own."""
 
 
 def cut_again_unaligned(r: dict[str, Any], *, fill_held: str, out_fps: float | None) -> None:
@@ -1230,6 +1236,7 @@ def run_set(
     out_fps: float | None = None,
     air_retime: str | None = None,
     meters_per_px: float | None = None,
+    ground_pin: str = "off",
 ) -> dict[str, Any]:
     """`bases` maps a view to its still; `facing` is right, left or `right,left` (`facings_of`), and a view filmed
     both ways is keyed `view@right` and `view@left` (`resolve_bases`). `handed` (`handedness.parse`) puts each
@@ -1299,7 +1306,7 @@ def run_set(
         return prepare_side
 
     with ThreadPoolExecutor(max_workers=max(1, concurrency)) as ex:
-        futures = {ex.submit(run_item, item=i, direction=d, state=s, base=b, root=root, character=character, duration=duration, resolution=resolution, key=key, force=force, gap=gap, video_runner=video_runner, shape=shape, anchor=anchor, spill=spill, facing=f, facing_fix=facing_fix, prepare_side=side_preparer(f), body_height=body_height, fit=fit, decontam=decontam, walk_start=walk_start, redraw_runner=redraw_runner, still_provider=still_provider, handed=handed, body_plan=body_plan, **({"end_frame": end_frames[i]} if end_frames and i in end_frames else {}), **({"play": plays[i]} if i in plays else {}), **({"motion": motions[i]} if i in motions else {}), fill_held="off" if i in aligned_items else fill_held, out_fps=None if i in aligned_items else out_fps, air_retime=air_retime, meters_per_px=meters_per_px): i for i, d, s, f, b in items}
+        futures = {ex.submit(run_item, item=i, direction=d, state=s, base=b, root=root, character=character, duration=duration, resolution=resolution, key=key, force=force, gap=gap, video_runner=video_runner, shape=shape, anchor=anchor, spill=spill, facing=f, facing_fix=facing_fix, prepare_side=side_preparer(f), body_height=body_height, fit=fit, decontam=decontam, walk_start=walk_start, redraw_runner=redraw_runner, still_provider=still_provider, handed=handed, body_plan=body_plan, **({"end_frame": end_frames[i]} if end_frames and i in end_frames else {}), **({"play": plays[i]} if i in plays else {}), **({"motion": motions[i]} if i in motions else {}), fill_held="off" if i in aligned_items else fill_held, out_fps=None if i in aligned_items else out_fps, air_retime=air_retime, meters_per_px=meters_per_px, ground_pin=ground_pin): i for i, d, s, f, b in items}
         for fut in as_completed(futures):
             r = fut.result()
             results.append(r)
@@ -1313,6 +1320,13 @@ def run_set(
     for r in results:
         if r.get("ok") and r["item"] in aligned_items and "cycle_align" not in r["loop"] and (fill_held != "off" or out_fps is not None):
             cut_again_unaligned(r, fill_held=fill_held, out_fps=out_fps)
+    if ground_pin == "on":
+        # The alignment cuts each walk it takes again from its clips; that cut stands as filmed, not on the ground pin.
+        for r in results:
+            if r.get("ok") and r.get("state") == GROUND_PIN_STATE and "cycle_align" in r.get("loop", {}):
+                print(f"video-set: warning: {r['item']}: --ground-pin is not applied to a walk the cycle alignment cut "
+                      "(video-cycle-align does not pin yet): its loop is as aligned — cut it with video-loop --ground-pin "
+                      "on, or --align-cycles off", file=sys.stderr)
     table = write_table(results, root / "table.md", both=both)
     failed = [r["item"] for r in results if not r.get("ok")] + [f"cycle-align:{st}" for st, a in aligned.items() if not a.get("ok")]
     # What the set left undone for want of RIFE — never a failure, never silent.
@@ -1450,6 +1464,10 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="which own foot lands on the first strike of an item's loop (e.g. front-walk=left), for a loop the "
                              "alignment report lists under `unnamed_feet` (video-cycle-align --foot; repeatable): that loop starts as "
                              "the set's start foot lands, recorded start_foot_source given")
+    parser.add_argument("--ground-pin", choices=loop_mod.GROUND_PIN_MODES, default="off",
+                        help="on: each walk's loop stands on one ground line (video-loop --ground-pin on): every frame moved "
+                             "up, whole, so its lowest solid row is the cut's ground — for a walk filmed with a level torso "
+                             "whose feet float over part of its stride; never a run (its air); off (default): as cut")
     parser.add_argument("--fill-held", choices=held_fill_mod.MODES, default="auto",
                         help="each cut's neighbour cells showing the same picture (video-loop --fill-held): auto (default) makes "
                              "them again with RIFE's frames between (a walk or run the set aligns is cut as filmed and filled once "
@@ -1496,6 +1514,7 @@ def run(**kwargs: object) -> int:
         motion=_parse_keyed(list(kwargs.get("motion") or []), "--motion") or None,  # type: ignore[arg-type]
         fill_held=str(kwargs.get("fill_held") or "auto"), out_fps=kwargs.get("out_fps"),  # type: ignore[arg-type]
         air_retime=kwargs.get("air_retime"), meters_per_px=kwargs.get("meters_per_px"),  # type: ignore[arg-type]
+        ground_pin=str(kwargs.get("ground_pin") or "off"),
     )
     return 0 if not payload["failed"] else 1
 

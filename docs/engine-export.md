@@ -77,7 +77,10 @@ ground off its lowest frames.
 ground line, and a last panel with every state's silhouette tinted and overlaid — one pair of feet when aligned.
 
 A warning is fixed where the offset comes from, not in the atlas: a strip whose `kind` is wrong for its motion,
-an effect drawn into the stance frame, a cut whose first frame is not the stance (cut it again from the stance).
+an effect drawn into the stance frame, a cut whose first frame is not the stance (cut it again from the stance),
+or a walk whose feet float over part of its stride — its first frame stands above the ground the anchor reads
+off its lowest frames: cut it again with `video-loop --ground-pin on` ([video-pipeline](video-pipeline.md),
+"A walk's feet stand on one ground line"), or film it again.
 
 ```javascript
 this.load.atlas('frog', 'atlas/frog.png', 'atlas/frog.json');
