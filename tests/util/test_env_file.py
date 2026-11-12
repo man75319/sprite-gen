@@ -63,5 +63,24 @@ def test_the_example_lists_the_keys_and_holds_no_value_and_env_is_ignored():
     root = env_file.repo_root()
     example = env_file.parse((root / ".env.example").read_text(encoding="utf-8"), environ={})
     assert {"DMX_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"} <= set(example)
-    assert all(not v or v.startswith("https://") or v in ("off", "gpt-image-2.5-flare") for v in example.values())
+    assert all(not v or v.startswith("https://") or v in ("off", "gpt-image-2.5-flare", ".sprite-gen-config") for v in example.values())
     assert "/.env" in (root / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
+def test_a_folder_named_relative_in_the_file_is_the_files_own(tmp_path, monkeypatch):
+    """`SPRITE_GEN_CONFIG_DIR=.sprite-gen-config` is the checkout's folder wherever sprite-gen is run from; an absolute
+    one, and one the shell set, are as given."""
+    monkeypatch.delenv(env_file.ENV_FILE_VAR, raising=False)
+    monkeypatch.delenv("SPRITE_GEN_CONFIG_DIR", raising=False)
+    monkeypatch.chdir(tmp_path.parent)
+    (tmp_path / ".env").write_text("SPRITE_GEN_CONFIG_DIR=.sprite-gen-config\n", encoding="utf-8")
+    env_file.load(tmp_path)
+    assert os.environ["SPRITE_GEN_CONFIG_DIR"] == str(tmp_path / ".sprite-gen-config")
+    absolute = tmp_path / "abs"
+    monkeypatch.delenv("SPRITE_GEN_CONFIG_DIR")
+    (tmp_path / ".env").write_text(f"SPRITE_GEN_CONFIG_DIR={absolute}\n", encoding="utf-8")
+    env_file.load(tmp_path)
+    assert os.environ["SPRITE_GEN_CONFIG_DIR"] == str(absolute)
+    monkeypatch.setenv("SPRITE_GEN_CONFIG_DIR", "from-shell")
+    env_file.load(tmp_path)
+    assert os.environ["SPRITE_GEN_CONFIG_DIR"] == "from-shell"

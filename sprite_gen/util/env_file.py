@@ -27,6 +27,10 @@ _LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$"
 _REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
+# Settings that name a folder: written relative in the file, they are read from the file's own folder.
+PATH_VARS = frozenset({"SPRITE_GEN_CONFIG_DIR"})
+
+
 def repo_root() -> Path | None:
     """The checkout this package runs from (`pyproject.toml` beside the package), or None for an installed wheel."""
     root = Path(__file__).resolve().parents[2]
@@ -79,6 +83,9 @@ def load(root: Path | None = None) -> dict[str, str]:
     if path is not None and path.is_file():
         for name, value in parse(path.read_text(encoding="utf-8-sig")).items():
             if name not in os.environ:
+                if name in PATH_VARS and value.strip() and not Path(value).expanduser().is_absolute():
+                    # a folder named relative in the file is the checkout's, wherever sprite-gen is run from
+                    value = str(path.parent / value)
                 os.environ[name] = value
                 loaded[name] = "file"
     if put_tools_on_path(root):

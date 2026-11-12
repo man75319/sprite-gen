@@ -37,3 +37,6 @@ CLAUDE.md
 /work/
 # Downloaded tools (ffmpeg, libwebp, RIFE): binaries, not source.
 /.tools/
+
+# sprite-gen defaults kept in the checkout (SPRITE_GEN_CONFIG_DIR in .env)
+/.sprite-gen-config/
