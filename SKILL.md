@@ -144,7 +144,7 @@ Scene creation consumes finished assets and remains optional. Asset metadata own
 
 ## 실행 인터프리터
 
-`SPRITE_GEN_ROOT` is the absolute installed repository path. Use `$SPRITE_GEN_ROOT/.venv/bin/sprite-gen` or `$SPRITE_GEN_ROOT/.venv/bin/python`; do not assume an activated shell. **폴백 금지**: create a missing venv or report the failure, never use an arbitrary global Python. **NumPy 가 없는 인터프리터** fails at package import. Setup and diagnosis: [interpreter](docs/interpreter.md).
+`SPRITE_GEN_ROOT` is the absolute installed repository path. Use `$SPRITE_GEN_ROOT/.venv/bin/sprite-gen` or `$SPRITE_GEN_ROOT/.venv/bin/python`; do not assume an activated shell. **Windows**: the venv keeps its executables in `.venv/Scripts/`, not `.venv/bin/`; read every `.venv/bin/<tool>` in these docs as `.venv/Scripts/<tool>` (`sprite-gen.exe`, `python.exe`), and the same rule holds there. **폴백 금지**: create a missing venv or report the failure, never use an arbitrary global Python. **NumPy 가 없는 인터프리터** fails at package import. Setup and diagnosis: [interpreter](docs/interpreter.md).
 
 ## RIFE for walk and run loops
 

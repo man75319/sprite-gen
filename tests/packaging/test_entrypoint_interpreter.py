@@ -81,3 +81,8 @@ def test_skill_md_owns_the_interpreter_rule() -> None:
     # reads SKILL.md next; what a NumPy-less interpreter does lives there too.
     assert "NumPy 가 없는 인터프리터" in text, (
         "SKILL.md lost the clause telling agents what a NumPy-less interpreter does")
+    # Every command in SKILL.md and docs/ is written with `.venv/bin/`; on Windows the
+    # venv has no `bin/`, and an agent that does not know where it went reaches for a
+    # global python — the very fallback this file forbids.
+    assert ".venv/Scripts/" in text, (
+        "SKILL.md lost the Windows clause mapping .venv/bin/ to .venv/Scripts/")

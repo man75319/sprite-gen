@@ -14,6 +14,11 @@ $SPRITE_GEN_ROOT/.venv/bin/python <script.py> ...
 - **부트스트랩은 README quickstart·CI 와 같은 한 줄이다** — `python3 -m venv .venv && .venv/bin/pip install -e .`.
   `.venv` 가 없으면 만든 뒤 실행한다. 다른 경로에 만들었다면 그 인터프리터의 절대경로로 바꿔 쓴다 —
   바뀌면 안 되는 것은 경로가 아니라 **"전역 `python3` 를 쓰지 않는다"** 는 규칙이다.
+- **Windows 에서는 `bin/` 이 `Scripts/` 다** — `python -m venv` 가 실행 파일을 `.venv\Scripts\` 에 둔다
+  (`python.exe`, `pip.exe`, `sprite-gen.exe`). 문서의 `$SPRITE_GEN_ROOT/.venv/bin/<tool>` 은 전부
+  `$SPRITE_GEN_ROOT/.venv/Scripts/<tool>` 로 읽는다 — Git Bash 와 PowerShell 모두 `.exe` 없이 부를 수 있다.
+  부트스트랩도 `python -m venv .venv && .venv/Scripts/pip install -e .`. 바뀌는 건 디렉터리 이름뿐이고
+  규칙(venv 절대경로 · 폴백 금지)은 그대로다. 문서가 `bin/` 하나로 쓰는 건 경로 형식을 하나로 두기 위해서다.
 - **이유**: 의존(Pillow, NumPy)의 SSoT 는 `pyproject.toml` 이고, 그것을 실물로 만드는 곳은 이 venv 하나다.
   전역 `python3` 는 `$PATH` 가 그날 가리키는 아무 인터프리터이고(macOS 에서는 보통 homebrew CPython,
   PEP 668 `EXTERNALLY-MANAGED`), 거기 든 패키지는 손으로 넣은 것이라 선언과 실물이 갈린다. 실제로

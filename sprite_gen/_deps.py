@@ -23,11 +23,15 @@ at package import — before any entrypoint gets far enough to do partial work.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+# A Windows venv keeps its executables in `Scripts/`, not `bin/` (SKILL.md '실행 인터프리터');
+# naming `bin/python` there sends the reader to a path that does not exist.
+VENV_PYTHON = (REPO_ROOT / ".venv" / "Scripts" / "python.exe" if os.name == "nt"
+               else REPO_ROOT / ".venv" / "bin" / "python")
 
 
 def _missing_numpy_message() -> str:
