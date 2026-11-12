@@ -46,8 +46,6 @@ STABLE_SECONDS = 0.2
 STABLE_MAX = 0.025  # distance / visible subject mass, independent of canvas padding
 POSE_SHAPE_TOLERANCE = 0.05
 POSE_FLOOR_TOLERANCE = 0.02
-GROUND_HEIGHT_MAX = 0.8
-GROUND_STATES = frozenset({"death", "fall"})
 GROUND_PX = 4  # a body whose lowest row is this close to the floor row stands on it (`on_floor`)
 
 
@@ -102,7 +100,7 @@ def given_ending(D: np.ndarray, masses: np.ndarray, fps: float, *, start: int, l
 
 def end_pose(state: str | None, frames: list[Image.Image], features: Callable[[Image.Image], np.ndarray]) -> EndPose:
     """The one judge of the pose a once cut ends on. A named terminal state (`STATES`) ends in its own body geometry
-    (`terminal_pose`): lowered for `death` and `fall`, changed for the rest. Any other motion played once — a once-hold
+    (`terminal_pose`): changed from its first, at any height. Any other motion played once — a once-hold
     the request chose, `video-loop --cycle once` on a jump or on a word of your own — ends in a drawing other than its
     first (`drawing_pose`), whatever its body box does. `features` is the distance matrix's feature function, so a
     drawing's distance is on the scale of the subject mass."""
@@ -163,12 +161,11 @@ def terminal_pose(boxes: list[Box | None], *, count: int, state: str | None) -> 
             and abs(aspect_ratio - 1) <= POSE_SHAPE_TOLERANCE
             and floor_shift <= POSE_FLOOR_TOLERANCE):
         raise ValueError("once ends in the starting pose: body height, aspect and floor position have returned")
-    if state in GROUND_STATES and height_ratio > GROUND_HEIGHT_MAX:
-        raise ValueError(f"once: {state} needs a lowered ground pose; end/start body height {height_ratio:.3f} exceeds {GROUND_HEIGHT_MAX}")
-    return {"profile": "ground" if state in GROUND_STATES else "changed",
+    # No state asks its end pose for a height of its own: a death or fall may end lower, wider or taller (a crab on
+    # its back, legs in the air), so the end pose only has to differ from the first; its height is recorded.
+    return {"profile": "changed",
             "height_ratio": height_ratio, "aspect_ratio": aspect_ratio, "floor_shift": floor_shift,
-            "shape_tolerance": POSE_SHAPE_TOLERANCE, "floor_tolerance": POSE_FLOOR_TOLERANCE,
-            **({"height_max": GROUND_HEIGHT_MAX} if state in GROUND_STATES else {})}
+            "shape_tolerance": POSE_SHAPE_TOLERANCE, "floor_tolerance": POSE_FLOOR_TOLERANCE}
 
 
 Ending = Callable[[np.ndarray, np.ndarray, float], tuple[int, int, dict[str, Any]]]

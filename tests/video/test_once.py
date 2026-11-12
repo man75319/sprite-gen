@@ -143,14 +143,18 @@ def test_once_cuts_at_the_first_settled_ground_pose_before_later_motion(tmp_path
     assert report["strip"]["hold_last"] is True
 
 
-def test_a_recolored_upright_endpoint_is_not_a_collapse(tmp_path):
+def test_a_death_may_end_taller_than_it_stood(tmp_path):
+    """A death ends in any pose other than its first, whatever its height: a crab rolled onto its back with its legs
+    in the air stands taller than it walked."""
     files = keyed(tmp_path / "keyed")
-    upright = Image.new("RGBA", (128, 96))
-    ImageDraw.Draw(upright).rectangle((34, 27, 50, 85), fill=(30, 80, 200, 255))
-    for k in range(75, 90):
-        upright.save(files / f"{k:04d}.png")
-    with pytest.raises(SystemExit, match="lowered"):
-        cut(tmp_path)
+    taller = Image.new("RGBA", (128, 96))
+    ImageDraw.Draw(taller).rectangle((40, 10, 90, 85), fill=(200, 80, 30, 255))
+    for k in range(60, 90):
+        taller.save(files / f"{k:04d}.png")
+    report = cut(tmp_path)
+    pose = report["cycle"]["terminal"]["pose"]
+    assert pose["profile"] == "changed" and pose["height_ratio"] > 1
+    assert report["strip"]["hold_last"] is True
 
 
 def test_batch_sends_terminal_pin_and_does_not_reuse_a_changed_pin(tmp_path, monkeypatch):
