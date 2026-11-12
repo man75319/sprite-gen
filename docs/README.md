@@ -131,6 +131,7 @@ grouping is derived from `sprite_gen/_modules.py`, the one taxonomy table.
 |---|---|
 | [capabilities.md](capabilities.md) | `sprite-gen capabilities`: every verb and argument as one JSON line read off the CLI's parser, the providers each verb may call and be billed by, the provider address and login variables |
 | [interpreter.md](interpreter.md) | Why the project venv is the only interpreter (no global `python3`, no NumPy fallback) |
+| [myautosprite.md](myautosprite.md) | This fork: a machine's setup (venv, `.env` keys, `.tools`), the `dmx` provider, its scripts and what it changed |
 | [rename-gate.md](rename-gate.md) | What must move together when a vocabulary word or key is renamed |
 | [release.md](release.md) | How a vX.Y.Z tag becomes a release page, what the lane builds and the publisher attaches, and what stays manual |
 | [troubleshooting.md](troubleshooting.md) | Symptoms of a pipeline that is "quietly wrong", with causes and fixes |

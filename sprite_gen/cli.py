@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from sprite_gen import _modules, gen
+from sprite_gen.util import env_file
 from sprite_gen.background import tile
 from sprite_gen.curate import anchor
 from sprite_gen.compose import compose_atlas, compose_cycle, compose_gif, export_aseprite, export_phaser, export_pngs
@@ -523,6 +524,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     utf8_streams()
+    env_file.load()  # the checkout's .env and .tools (sprite_gen/util/env_file.py)
     parser = _build_parser()
     args = parser.parse_args(argv)
     if getattr(args, "_retired_pp", False):

@@ -11,6 +11,12 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Never the machine's own .env (provider keys) in a test, in this process or any it starts; its .tools (ffmpeg,
+# img2webp: binaries, no setting) on PATH, as `sprite-gen` puts them for a run.
+os.environ["SPRITE_GEN_ENV_FILE"] = "off"
+from sprite_gen.util import env_file as _env_file  # noqa: E402
+
+_env_file.put_tools_on_path()
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 FIXTURE_RUN = Path(__file__).resolve().parent / "fixtures" / "run"
 
