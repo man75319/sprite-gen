@@ -71,6 +71,12 @@ Ask it in these words, with the reason from the line's `cause` (`login`: "로그
 > 2. 그록으로 만들기
 > 3. 멈추기
 
+## A video still is opaque, on a flat key
+
+A transparent still (a cut-out, `gen --transparent`) reaches the video model as the colour under its clear pixels, most
+often black, and no key cuts the clip: `video-canvas` and `video-set` refuse one before any paid call. Put it on a flat
+green or magenta key first (`scripts/myautosprite/make_key_canvas.py` in this fork; [myautosprite](docs/myautosprite.md#pipeline-b-clip-to-sprite-loop)).
+
 ## Side-view facing
 
 Keep the side still, canvas placement and motion prompt facing the same direction.

@@ -1330,6 +1330,9 @@ def run_set(
     for direction, turned, base in views:
         if not base.is_file():
             raise SystemExit(f"video-set: base still for '{direction}' not found: {base}")
+        with Image.open(base) as still_image:
+            # before any paid call (the facing check, the clip): a cut-out reaches the video model on black
+            canvas_mod.refuse_transparent(still_image)
     # (item, direction, state, facing, base); a set filmed both ways names a lateral item's facing
     items = [(f"{d}-{f}-{s}" if both and f else f"{d}-{s}", d, s, f or facings[0], b) for d, f, b in views for s in states]
     plays = item_values(play or {}, items, "--play")

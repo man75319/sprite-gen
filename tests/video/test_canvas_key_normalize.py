@@ -174,3 +174,27 @@ def test_mixed_contact_names_both(tmp_path: Path) -> None:
     keyed = Image.open(tmp_path / "keyed.refused" / files[1].name)
     split = frames_mod.classify_edge_contact(raw, keyed, GREEN)
     assert split["subject"] > 0 and split["residual"] > 0
+
+
+def test_a_still_with_transparent_pixels_is_refused_before_anything_is_filmed(tmp_path):
+    """A cut-out reaches the video model as the colour under its clear pixels (black, most often): refused at the canvas,
+    and by `video-set` before its first paid call, with the way to put it on a key."""
+    from sprite_gen.video import batch as batch_mod
+    from sprite_gen.video import canvas as canvas_mod
+    cutout = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    cutout.paste((200, 80, 30, 255), (20, 20, 44, 50))
+    still = tmp_path / "cutout.png"
+    cutout.save(still)
+    with pytest.raises(SystemExit, match="transparent pixels.*make_key_canvas"):
+        canvas_mod.run_canvas(still, tmp_path / "canvas.png", state="idle", shape=None, facing="right", headroom=None,
+                              lead=None, report_path=tmp_path / "canvas.report.json")
+    filmed = []
+    with pytest.raises(SystemExit, match="transparent pixels"):
+        batch_mod.run_set(bases={"side": still}, states=["idle"], root=tmp_path / "set", character=None, duration=None,
+                          resolution="480p", key="green", concurrency=1, force=False, gap=0,
+                          video_runner=lambda *a, **kw: filmed.append(a) or 0)
+    assert filmed == []
+    # an opaque RGBA still on a key is no cut-out
+    keyed = Image.new("RGBA", (64, 64), (0, 255, 0, 255))
+    keyed.paste((200, 80, 30, 255), (20, 20, 44, 50))
+    canvas_mod.refuse_transparent(keyed)

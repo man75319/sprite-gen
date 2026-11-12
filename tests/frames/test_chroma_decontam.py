@@ -714,7 +714,7 @@ def test_video_set_hands_its_decontam_to_video_frames_and_lists_the_warning(tmp_
         "resampled_seam_ratio": 0.2, "held_fill": {"cells": 10, "poses": 10, "held_runs": [], "made": [], "before": {"cells": 10, "poses": 10, "held_runs": []}}, "n_out": 10, "gif": {"file": "loop.gif"},
         "webp": {"file": "loop.webp"}, "strip": {"path": "strip.png"}})
     monkeypatch.setattr(batch, "_staggered_start", lambda gap: None)
-    still = Path(__file__).parents[1] / "fixtures" / "facing" / "left.png"
+    still = Path(__file__).parents[1] / "fixtures" / "facing" / "left-key.png"
     common = dict(bases={"front": still}, states=["attack"], character=None, duration=3, resolution="720p",
                   key="green", concurrency=1, force=False, gap=0, video_runner=video)
     default = batch.run_set(root=tmp_path / "default", **common)

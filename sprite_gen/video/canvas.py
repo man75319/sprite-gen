@@ -198,6 +198,22 @@ def resolve_key(corner: tuple[int, int, int], key: str) -> str | None:
     return key
 
 
+def refuse_transparent(image: Image.Image) -> None:
+    """A still with transparent pixels is refused before anything is filmed. The canvas is flattened to RGB, so its
+    clear pixels reach the video model as whatever colour they hold (most often black): the clip is filmed on a
+    background no key can cut, and only `video-frames` says so, after the clip was paid for (2026-11-12, four Seedance
+    clips of a crab on black). A cut-out goes on a flat key first."""
+    if image.mode not in ("RGBA", "LA", "PA") and not (image.mode == "P" and "transparency" in image.info):
+        return
+    alpha = np.asarray(image.convert("RGBA"), dtype=np.uint8)[..., 3]
+    clear = int((alpha < 255).sum())
+    if clear:
+        raise SystemExit(
+            f"video-canvas: the still has transparent pixels ({100 * clear / alpha.size:.1f}% of it); a video model sees "
+            "them as the colour under them (often black), so no key could cut the clip. Put the cut-out on a flat green "
+            "or magenta key first (scripts/myautosprite/make_key_canvas.py --source still.png --out still-green.png)")
+
+
 def normalize_key(image: Image.Image, kind: str) -> tuple[Image.Image, dict[str, Any]]:
     """Repaint the still's flat background to the exact declared key; the subject stays byte-identical.
 
@@ -331,6 +347,7 @@ def pad_canvas(
     lacks and the square the rows to match, above the still. With no `view` the
     room is not read.
     """
+    refuse_transparent(image)
     corner = corner_key(image)
     kind = resolve_key(corner, key)
     if kind is None:

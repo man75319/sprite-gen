@@ -41,9 +41,9 @@ def _video(prompts):
 
 
 def _bases():
-    return {"front": FIXTURES / "front.png",
-            "side@right": FIXTURES / "right.png", "side@left": FIXTURES / "left.png",
-            "front_diagonal@right": FIXTURES / "right.png", "front_diagonal@left": FIXTURES / "left.png"}
+    return {"front": FIXTURES / "front-key.png",
+            "side@right": FIXTURES / "right-key.png", "side@left": FIXTURES / "left-key.png",
+            "front_diagonal@right": FIXTURES / "right-key.png", "front_diagonal@left": FIXTURES / "left-key.png"}
 
 
 def test_both_facings_film_every_turned_view_twice_from_its_own_still(tmp_path, offline) -> None:
@@ -69,8 +69,8 @@ def test_both_facings_film_every_turned_view_twice_from_its_own_still(tmp_path, 
     # each side still is inspected for its own facing, into its own copy, never turned over
     side_left = next(i for i in result["items"] if i["item"] == "side-left-walk")["facing"]
     assert side_left["requested"] == "left" and side_left["action"] == "none"
-    assert (tmp_path / "side-left.facing.png").read_bytes() == (FIXTURES / "left.png").read_bytes()
-    assert (tmp_path / "side-right.facing.png").read_bytes() == (FIXTURES / "right.png").read_bytes()
+    assert (tmp_path / "side-left.facing.png").read_bytes() == (FIXTURES / "left-key.png").read_bytes()
+    assert (tmp_path / "side-right.facing.png").read_bytes() == (FIXTURES / "right-key.png").read_bytes()
     assert dict(offline) == {"front-walk": "right", "side-right-walk": "right", "side-left-walk": "left",
                              "front_diagonal-right-walk": "right", "front_diagonal-left-walk": "left"}
     table = (tmp_path / "table.md").read_text()
@@ -79,7 +79,7 @@ def test_both_facings_film_every_turned_view_twice_from_its_own_still(tmp_path, 
 
 def test_one_facing_keeps_the_item_names_and_table(tmp_path, offline) -> None:
     prompts: dict[str, str] = {}
-    result = batch.run_set(bases={"front_diagonal": FIXTURES / "left.png"}, states=["attack"], root=tmp_path,
+    result = batch.run_set(bases={"front_diagonal": FIXTURES / "left-key.png"}, states=["attack"], root=tmp_path,
                            character=None, duration=2, resolution="720p", key="green", concurrency=1, force=False,
                            gap=0, facing="left", video_runner=_video(prompts))
     assert [i["item"] for i in result["items"]] == ["front_diagonal-attack"]
@@ -88,11 +88,11 @@ def test_one_facing_keeps_the_item_names_and_table(tmp_path, offline) -> None:
 
 
 @pytest.mark.parametrize("bases,facing,error", [
-    ({"side": "right.png"}, "right,left", "needs a still for each"),
-    ({"side@right": "right.png"}, "right,left", "draw it that way"),
-    ({"side@left": "left.png"}, "right", "the set is filmed facing right"),
+    ({"side": "right-key.png"}, "right,left", "needs a still for each"),
+    ({"side@right": "right-key.png"}, "right,left", "draw it that way"),
+    ({"side@left": "left-key.png"}, "right", "the set is filmed facing right"),
     ({"front@left": "front.png"}, "right", "not turned to a side"),
-    ({"side": "right.png"}, "up", "--facing must be right, left or right,left"),
+    ({"side": "right-key.png"}, "up", "--facing must be right, left or right,left"),
 ])
 def test_bases_that_would_need_a_mirror_or_make_no_sense_are_refused(tmp_path, bases, facing, error) -> None:
     with pytest.raises(SystemExit, match=error):
@@ -103,7 +103,7 @@ def test_bases_that_would_need_a_mirror_or_make_no_sense_are_refused(tmp_path, b
 
 def test_mirror_correction_is_refused_with_an_item(tmp_path) -> None:
     with pytest.raises(SystemExit, match="moves every --handed item"):
-        batch.run_set(bases={"side": FIXTURES / "right.png"}, states=["walk"], root=tmp_path, character=None,
+        batch.run_set(bases={"side": FIXTURES / "right-key.png"}, states=["walk"], root=tmp_path, character=None,
                       duration=3, resolution="720p", key="green", concurrency=1, force=False, gap=0,
                       facing_fix="mirror", video_runner=_video({}), handed=WATCH)
 
@@ -111,7 +111,7 @@ def test_mirror_correction_is_refused_with_an_item(tmp_path) -> None:
 def test_cli_threads_both_facings_and_items(monkeypatch, tmp_path) -> None:
     seen = []
     monkeypatch.setattr(batch, "run_set", lambda **kw: seen.append(kw) or {"failed": []})
-    assert batch.main(["--base", f"side@right={FIXTURES / 'right.png'}", "--base", f"side@left={FIXTURES / 'left.png'}",
+    assert batch.main(["--base", f"side@right={FIXTURES / 'right-key.png'}", "--base", f"side@left={FIXTURES / 'left-key.png'}",
                        "--states", "walk", "--out-dir", str(tmp_path), "--facing", "right,left",
                        "--handed", "the black smartwatch=left wrist"]) == 0
     assert seen[0]["facing"] == "right,left" and seen[0]["handed"] == WATCH

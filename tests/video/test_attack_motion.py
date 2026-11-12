@@ -13,7 +13,7 @@ import pytest
 
 from sprite_gen.video import batch as batch_mod
 
-FIXTURE = Path(__file__).parents[1] / "fixtures" / "facing" / "left.png"
+FIXTURE = Path(__file__).parents[1] / "fixtures" / "facing" / "left-key.png"
 
 
 def test_attack_text_is_one_timed_strike_that_keeps_the_drawn_grip() -> None:

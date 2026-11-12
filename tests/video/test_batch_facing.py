@@ -7,7 +7,7 @@ import pytest
 
 from sprite_gen.video import batch
 
-FIXTURE = Path(__file__).parents[1] / "fixtures" / "facing" / "left.png"
+FIXTURE = Path(__file__).parents[1] / "fixtures" / "facing" / "left-key.png"
 
 
 @pytest.fixture
@@ -108,7 +108,7 @@ def test_parallel_states_share_one_inspection_of_the_side_still(tmp_path, offlin
         out.write_bytes(b"test-video")
         report.write_text(json.dumps({"prompt": prompt}))
         return 0
-    source = FIXTURE.with_name("right.png")
+    source = FIXTURE.with_name("right-key.png")
     result = batch.run_set(bases={"side": source}, states=["idle", "attack", "walk"], root=tmp_path,
                            character=None, duration=3, resolution="720p", key="green",
                            concurrency=3, force=False, gap=0, video_runner=video)
