@@ -23,12 +23,18 @@ def main() -> int:
     parser.add_argument("--height", type=int, default=600, help="subject height in the canvas")
     parser.add_argument("--baseline", type=int, default=900, help="y of the subject's lowest pixel")
     parser.add_argument("--crop-bottom", type=int, default=None, help="drop everything below this y (a watermark)")
+    parser.add_argument("--alpha-floor", type=int, default=64,
+                        help="pixels at or under this alpha are dropped, not placed: a generator's cut-out leaves faint "
+                             "specks near its edges, which would widen the subject's box to the whole image and shrink "
+                             "the subject (default 64; 0 keeps every pixel)")
     args = parser.parse_args()
 
     image = Image.open(args.source).convert("RGBA")
     if args.crop_bottom is not None:
         image = image.crop((0, 0, image.width, args.crop_bottom))
-    box = image.getchannel("A").getbbox()
+    alpha = image.getchannel("A").point(lambda a: a if a > args.alpha_floor else 0)
+    image.putalpha(alpha)
+    box = alpha.getbbox()
     if box is None:
         raise SystemExit(f"{args.source}: nothing opaque to place")
     subject = image.crop(box)
