@@ -12,8 +12,10 @@ the strips a character has into the shape a Phaser game loads with `this.load.at
   `setFlipX` mirrors about it), and `<name>.meta.json` lists `cell`, `anchor`, `origin` and one animation per
   state (`key`, `prefix`, `count`, `zeroPad`, `frameRate`, `repeat`) for `anims.generateFrameNames`.
 
-A state's ground point: for a loop, the lowest row any of its frames reaches and the mean alpha centroid of its
-frames (a step's lifted foot or forward lean does not pull it); for a cut played once, its first frame's
+A state's ground point: for a loop, the lowest row its frames reach and the mean alpha centroid of its
+frames (a step's lifted foot or forward lean does not pull it) — a few frames whose lowest row sits well below
+every other frame's (an impact burst or a dust cloud drawn under the feet) do not set that row, or the whole
+state would stand that far above the ground; for a cut played once, its first frame's
 bottom row and centroid (a lunge or a fall moves away from where it started, which is what the anchor must
 not follow). Pixels are never redrawn: cells are moved by whole pixels, and only `--max-cell` resamples.
 """
@@ -42,6 +44,11 @@ ALPHA_FLOOR = 8
 MAX_SIDE = 2048
 """Above this the atlas may not fit an older device's texture limit (4096 is today's common one)."""
 WIDTH_CANDIDATES = (256, 512, 1024, 2048, 4096, 8192)
+OUTLIER_SHARE = 0.1
+"""At most this share of a loop's frames may reach below the ground the rest stand on (and at least one)."""
+OUTLIER_GAP = 0.08
+"""...and only past a gap of more than this share of the figure's median height: a walk's bottoms rise and fall
+row by row, with no such gap, so its planted foot still sets the ground."""
 
 
 @dataclass(frozen=True)
@@ -119,6 +126,17 @@ def _centroid_x(cell: Image.Image) -> float | None:
     return float((a.sum(axis=0) * np.arange(a.shape[1], dtype=np.float32)).sum() / total)
 
 
+def _loop_ground(bottoms: list[int], heights: list[int]) -> int:
+    """The lowest row of a loop's frames, less a few frames reaching well below all the others (module docstring)."""
+    rows = sorted(bottoms)
+    gap = OUTLIER_GAP * float(np.median(heights))
+    most = max(1, int(len(rows) * OUTLIER_SHARE))
+    for dropped in range(1, min(most, len(rows) - 1) + 1):
+        if rows[-dropped] - rows[-dropped - 1] > gap:
+            return rows[-dropped - 1]
+    return rows[-1]
+
+
 def ground_anchor(strip: Strip) -> Anchor:
     """The state's feet point (module docstring): a loop's lowest row and mean centroid, a once cut's first frame."""
     boxes = [_bbox(c) for c in strip.cells]
@@ -128,7 +146,7 @@ def ground_anchor(strip: Strip) -> Anchor:
         known = [x for x in xs if x is not None]
         if not bottoms:
             raise ValueError(f"{strip.state}: every frame is empty")
-        return Anchor(sum(known) / len(known), float(max(bottoms)))
+        return Anchor(sum(known) / len(known), float(_loop_ground(bottoms, [b[3] - b[1] for b in boxes if b])))
     first = next((i for i, b in enumerate(boxes) if b is not None), None)
     if first is None:
         raise ValueError(f"{strip.state}: every frame is empty")
@@ -261,6 +279,12 @@ def build(
     }
     meta = {"name": name, "cell": list(out_cell), "anchor": list(out_anchor), "origin": list(origin), "anims": anims}
     warnings: list[str] = []
+    for strip, anchor in zip(strips, anchors):
+        below = [i for i, c in enumerate(strip.cells) if (b := _bbox(c)) is not None and b[3] > anchor.y]
+        if strip.loop and below:  # a cut played once may fall below its first frame: that is its motion
+            warnings.append(f"{strip.state}: frame(s) {', '.join(map(str, below))} reach below the ground the other "
+                            "frames stand on (an effect drawn under the feet?): left out of the ground line, they "
+                            "hang below sprite.y")
     if max(packed.width, packed.height) > MAX_SIDE:
         warnings.append(f"atlas {packed.width}x{packed.height} is over {MAX_SIDE}: an older device's texture limit may "
                         "not hold it; give --max-cell (or fewer frames)")

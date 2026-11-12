@@ -132,3 +132,26 @@ def test_the_cli_writes_the_three_files_together(tmp_path, capsys):
         assert list(im.size) == report["atlas"]
     assert "export-phaser" in cli.COMMANDS
     assert ep.run(loops, "frog", out, max_cell=-1) == 1
+
+
+def test_an_effect_under_the_feet_in_a_few_loop_frames_does_not_lift_the_ground(tmp_path):
+    """A slash whose impact burst reaches below the feet in one frame of ten: the other nine set the ground,
+    so the attack stands on the same line as the walk, and the burst is reported hanging below it."""
+    cells = [_blob(100, 160, (30, 40, 70, 90)) for _ in range(10)]
+    burst = cells[6].copy()
+    burst.paste(Image.new("RGBA", (30, 40), (255, 255, 255, 255)), (5, 110))
+    cells[6] = burst
+    walk = [_blob(100, 100, (30, 40 + d, 70, 90 + d)) for d in (0, -1, -2, -1)]  # a bob row by row: no gap
+    loops = [("walk", _strip(tmp_path / "walk", "walk", walk)),
+             ("attack", _strip(tmp_path / "attack", "attack", cells))]
+    atlas, js, meta, report = ep.build(loops, name="wolf")
+    anchor = tuple(meta["anchor"])
+
+    def bottom(name):
+        r = js["frames"][name]["frame"]
+        return ep._bbox(atlas.crop((r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"])))[3] - anchor[1]
+
+    assert [bottom(f"wolf_walk_{i:02d}") for i in range(4)] == [0, -1, -2, -1]
+    assert [bottom(f"wolf_attack_{i:02d}") for i in range(10) if i != 6] == [0] * 9
+    assert bottom("wolf_attack_06") == 60
+    assert [w for w in report["warnings"] if w.startswith("attack: frame(s) 6 ")]
