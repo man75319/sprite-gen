@@ -198,3 +198,16 @@ def test_a_state_whose_stance_lands_off_the_idles_is_reported(tmp_path):
 def test_states_standing_on_one_stance_pass_the_alignment_check(tmp_path):
     _, _, _, report = ep.build(_set(tmp_path), name="frog")
     assert [(r["state"], r["ok"]) for r in report["alignment"]] == [("walk", True), ("attack", True)]
+
+
+def test_a_walk_whose_first_frame_floats_above_its_lowest_frames_is_reported(tmp_path):
+    """The anchor reads a walk's ground off its lowest frames; a walk whose feet rise with the stride starts above
+    it. Its first frame is what the switch from idle shows, so the check reads that frame and warns."""
+    idle = [_blob(200, 100, (80, 40, 120, 90)) for _ in range(4)]
+    walk = [_blob(200, 100, (80, 32 + b, 120, 82 + b)) for b in (0, 4, 8, 4)]  # lowest at frame 2, 8 px under frame 0
+    loops = [("idle", _strip(tmp_path / "idle", "idle", idle, kind="pinned")),
+             ("walk", _strip(tmp_path / "walk", "walk", walk))]
+    _, _, _, report = ep.build(loops, name="wolf")
+    by = {r["state"]: r for r in report["alignment"]}
+    assert not by["walk"]["ok"] and by["walk"]["dy"] == -8 and by["walk"]["dx"] == 0
+    assert [w for w in report["warnings"] if w.startswith("walk: its stance stands +0 px across and -8 px down")]

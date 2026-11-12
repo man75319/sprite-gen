@@ -65,11 +65,13 @@ cell is as tall as the highest jump and as wide as the longest lunge, so `--max-
 ### Alignment check
 
 Every export measures where each state stands once packed — its feet (the middle of the opaque columns just
-above its lowest row) and its ground row: a periodic loop averaged over its stride, any other state on its
-first frame — against `idle`'s (or the first state's). The report's `alignment` lists per state `feet_x` and
-`ground` (from the anchor), `dx` and `dy` (from the reference), its `tolerance` and `ok`; a state further than
-3 % of the reference's height (at least 2 px; twice that against a periodic loop, whose stance is a stride's mean)
-prints a warning: the body would jump when the animation switches.
+above its lowest row) and its ground row on its first frame — the frame an animation switches onto, a walk's
+too — against `idle`'s (or the first state's). The report's `alignment` lists per state `feet_x` and
+`ground` (from the anchor), `dx` and `dy` (from the reference), its `tolerance` (`[across, down]`) and `ok`; a
+state further than 3 % of the reference's height (at least 2 px; across, twice that for a periodic loop, whose
+first frame is mid-stride) prints a warning: the body would jump when the animation switches. A walk whose
+first frame stands above the ground is a walk whose feet float in the frames like it: the anchor reads its
+ground off its lowest frames.
 
 `<name>.align.png` shows it: one panel per state with the frame it starts on, the anchor's crosshair and the
 ground line, and a last panel with every state's silhouette tinted and overlaid — one pair of feet when aligned.

@@ -48,8 +48,9 @@ MAX_SIDE = 2048
 WIDTH_CANDIDATES = (256, 512, 1024, 2048, 4096, 8192)
 ALIGN_TOLERANCE = 0.03
 """Two states' stances may stand at most this share of the reference stance's height apart (and 2 px) before
-the export warns: past it the body visibly jumps when the animation switches. A periodic loop's stance is its
-stride's mean, not a pose it hands over, so it is given twice that."""
+the export warns: past it the body visibly jumps when the animation switches. Across, a walk's or run's first
+frame is mid-stride (its feet apart, not under the body as a stance's), so a periodic loop is given twice that
+across; never up and down: its feet are on the ground there as everywhere."""
 FEET_BAND = 0.06
 """The feet are the opaque columns in this share of the stance's height above its lowest row."""
 OUTLIER_SHARE = 0.1
@@ -228,20 +229,17 @@ def _feet(cell: Image.Image) -> tuple[float, int, int] | None:
     return (float(cols[0] + cols[-1] + 1) / 2, box[3], height)
 
 
-def stance(cells: list[Image.Image], periodic: bool) -> dict[str, float] | None:
-    """Where a state stands in its cell: its feet's middle x, its ground row and its height.
+def stance(cells: list[Image.Image], periodic: bool) -> dict[str, Any] | None:
+    """Where a state stands in its cell: its first frame's feet middle x, ground row and height.
 
-    A periodic loop's feet averaged over its frames on its ground row (as `ground_anchor` reads it); any other
-    state's first frame, which the previous animation hands over to."""
-    feet = [f for f in (_feet(c) for c in cells) if f is not None]
-    if not feet:
+    The first frame for every state, a walk's too: an animation switches onto its frame 0, so that frame is where
+    the body jumps or not (a mean over a stride would hide a walk whose feet float above the ground the anchor
+    reads off its lowest frames)."""
+    first = next((f for f in (_feet(c) for c in cells) if f is not None), None)
+    if first is None:
         return None
-    if not periodic:
-        x, ground, height = feet[0]
-        return {"x": x, "ground": float(ground), "height": float(height), "periodic": False}
-    return {"x": sum(f[0] for f in feet) / len(feet),
-            "ground": float(_loop_ground([f[1] for f in feet], [f[2] for f in feet])),
-            "height": float(np.median([f[2] for f in feet])), "periodic": True}
+    x, ground, height = first
+    return {"x": x, "ground": float(ground), "height": float(height), "periodic": periodic}
 
 
 def check_alignment(stances: dict[str, dict[str, float] | None],
@@ -259,14 +257,15 @@ def check_alignment(stances: dict[str, dict[str, float] | None],
     warnings: list[str] = []
     for state, st in known.items():
         dx, dy = st["x"] - r["x"], st["ground"] - r["ground"]
-        tol = max(2.0, ALIGN_TOLERANCE * r["height"]) * (2 if st.get("periodic") or r.get("periodic") else 1)
-        ok = abs(dx) <= tol and abs(dy) <= tol
+        tol = max(2.0, ALIGN_TOLERANCE * r["height"])
+        tol_x = tol * (2 if st.get("periodic") or r.get("periodic") else 1)
+        ok = abs(dx) <= tol_x and abs(dy) <= tol
         records.append({"state": state, "reference": ref, "feet_x": round(st["x"] - anchor[0], 1),
                         "ground": round(st["ground"] - anchor[1], 1), "dx": round(dx, 1), "dy": round(dy, 1),
-                        "tolerance": round(tol, 1), "ok": ok})
+                        "tolerance": [round(tol_x, 1), round(tol, 1)], "ok": ok})
         if not ok:
             warnings.append(f"{state}: its stance stands {dx:+.0f} px across and {dy:+.0f} px down from {ref}'s "
-                            f"(tolerance {tol:.0f} px): the body jumps when the animation switches; look at the "
+                            f"(tolerance {tol_x:.0f} across, {tol:.0f} down): the body jumps when the animation switches; look at the "
                             "alignment preview (<name>.align.png), then at what pulls this state's anchor (an effect, "
                             "a first frame that is not the stance) - docs/engine-export.md")
     return records, warnings
