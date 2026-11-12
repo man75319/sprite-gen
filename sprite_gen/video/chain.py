@@ -101,8 +101,19 @@ class Piece:
 # --- the pieces -------------------------------------------------------------------------------------------------------
 
 def _frames_report(folder: Path) -> dict[str, Any]:
-    path = folder.parent / FRAMES_REPORT
-    return json.loads(path.read_text(encoding="utf-8")) if folder.name == KEYED and path.is_file() else {}
+    """The `video-frames` report of a keyed/ folder: beside it (`video-frames --out-dir D`: D/keyed, D/frames.report.json)
+    or one up (`video-set`: <item>/frames/keyed, <item>/frames.report.json), there only where it names this folder as
+    its `keyed_dir`, so a report of other frames is never read for these."""
+    if folder.name != KEYED:
+        return {}
+    for path in (folder.parent / FRAMES_REPORT, folder.parent.parent / FRAMES_REPORT):
+        if not path.is_file():
+            continue
+        report = json.loads(path.read_text(encoding="utf-8"))
+        named = report.get("keyed_dir")
+        if path.parent == folder.parent or (named and Path(named).resolve() == folder.resolve()):
+            return report
+    return {}
 
 
 def _stated_key(report: dict[str, Any]) -> str | None:

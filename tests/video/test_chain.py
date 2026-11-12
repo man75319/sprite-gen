@@ -648,3 +648,18 @@ def test_rife_makes_a_chain_s_bridge_and_places_with_none_shown_again(tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert report["read"]["unlisted"] == 0 and gate(tmp_path / "out" / "keyed") == 0
     assert Image.open(sorted((tmp_path / "out" / "keyed").glob("*.png"))[1]).size == (120, 140)
+
+
+def test_a_video_set_items_report_one_folder_up_is_read_and_a_report_of_other_frames_is_not(tmp_path):
+    """`video-set` keeps an item's `video-frames` report beside its frames/ folder, not inside it
+    (<item>/frames/keyed, <item>/frames.report.json): the chain reads it there, where it names these frames."""
+    item = tmp_path / "side-attack"
+    keyed = clip(item, "frames") / "keyed"
+    report = item / "frames.report.json"
+    report.write_text(json.dumps({"key": "green", "key_read": "green", "fps": 24.0, "keyed_dir": str(keyed)}))
+    out = make(tmp_path, [f"one={item / 'frames'}:0:3"], key=None)
+    assert out["key"] == "green" and out["pieces"][0]["key_from"] == "frames.report.json"
+    # one up, a report of some other item's frames speaks for none of these
+    report.write_text(json.dumps({"key": "green", "fps": 24.0, "keyed_dir": str(tmp_path / "elsewhere" / "keyed")}))
+    with pytest.raises(chain.ChainRefused, match="no report says"):
+        make(tmp_path, [f"one={item / 'frames'}:0:3"], key=None)
