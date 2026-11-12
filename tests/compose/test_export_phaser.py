@@ -24,7 +24,7 @@ def _blob(w: int, h: int, box: tuple[int, int, int, int], colour=(200, 180, 40))
     return im
 
 
-def _strip(folder: Path, state: str, cells: list[Image.Image], *, fps=24.0, loop=True, body_h=400) -> Path:
+def _strip(folder: Path, state: str, cells: list[Image.Image], *, fps=24.0, loop=True, body_h=400, kind=None) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     w, h = cells[0].size
     sheet = Image.new("RGBA", (w * len(cells), h), (0, 0, 0, 0))
@@ -32,7 +32,7 @@ def _strip(folder: Path, state: str, cells: list[Image.Image], *, fps=24.0, loop
         sheet.paste(c, (i * w, 0))
     sheet.save(folder / f"side-{state}.strip.png")
     meta = {"frames": len(cells), "w": w, "h": h, "fps": fps, "delay_ms": round(1000 / fps, 2), "loop": loop,
-            "kind": "periodic" if loop else "once", "body_h": body_h, "state": state}
+            "kind": kind or ("periodic" if loop else "once"), "body_h": body_h, "state": state}
     (folder / f"side-{state}.strip.json").write_text(json.dumps(meta), encoding="utf-8")
     return folder
 
@@ -155,3 +155,23 @@ def test_an_effect_under_the_feet_in_a_few_loop_frames_does_not_lift_the_ground(
     assert [bottom(f"wolf_attack_{i:02d}") for i in range(10) if i != 6] == [0] * 9
     assert bottom("wolf_attack_06") == 60
     assert [w for w in report["warnings"] if w.startswith("attack: frame(s) 6 ")]
+
+
+def test_an_attack_looped_from_its_stance_stands_where_its_first_frame_does(tmp_path):
+    """A `fixed` loop (a slash from a stance back to it): the slash reaching forward in its middle frames does not
+    pull the anchor, so its first frame stands on the anchor exactly as the idle does — no jump between them."""
+    idle = [_blob(200, 100, (80, 40, 120, 90)) for _ in range(4)]
+    slash = [_blob(200, 100, (80, 40, 120, 90))] + [_blob(200, 100, (10, 40, 120, 90)) for _ in range(6)]         + [_blob(200, 100, (80, 40, 120, 90))]
+    loops = [("idle", _strip(tmp_path / "idle", "idle", idle, kind="pinned")),
+             ("attack", _strip(tmp_path / "attack", "attack", slash, kind="fixed"))]
+    atlas, js, meta, report = ep.build(loops, name="wolf")
+    anchor = tuple(meta["anchor"])
+
+    def frame(name):
+        r = js["frames"][name]["frame"]
+        return atlas.crop((r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"]))
+
+    assert _feet(frame("wolf_idle_00"), anchor, None) == pytest.approx((0, 0), abs=0.5)
+    assert _feet(frame("wolf_attack_00"), anchor, None) == pytest.approx((0, 0), abs=0.5)
+    assert _feet(frame("wolf_attack_07"), anchor, None) == pytest.approx((0, 0), abs=0.5)
+    assert [a["repeat"] for a in meta["anims"]] == [-1, -1] and report["warnings"] == []

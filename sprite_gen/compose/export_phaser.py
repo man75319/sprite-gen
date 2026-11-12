@@ -12,12 +12,13 @@ the strips a character has into the shape a Phaser game loads with `this.load.at
   `setFlipX` mirrors about it), and `<name>.meta.json` lists `cell`, `anchor`, `origin` and one animation per
   state (`key`, `prefix`, `count`, `zeroPad`, `frameRate`, `repeat`) for `anims.generateFrameNames`.
 
-A state's ground point: for a loop, the lowest row its frames reach and the mean alpha centroid of its
+A state's ground point: for a periodic loop (a walk, a sway), the lowest row its frames reach and the mean alpha centroid of its
 frames (a step's lifted foot or forward lean does not pull it) — a few frames whose lowest row sits well below
 every other frame's (an impact burst or a dust cloud drawn under the feet) do not set that row, or the whole
-state would stand that far above the ground; for a cut played once, its first frame's
-bottom row and centroid (a lunge or a fall moves away from where it started, which is what the anchor must
-not follow). Pixels are never redrawn: cells are moved by whole pixels, and only `--max-cell` resamples.
+state would stand that far above the ground; for a cut played once, or a loop that starts from a stance and
+returns to it (`pinned`, `fixed`: an attack, an idle), its first frame's bottom row and centroid (a lunge, a
+slash or a fall moves away from where it started, which is what the anchor must not follow: the mean of a
+slash's frames sits toward the slash, and its stance would start that far from the idle's). Pixels are never redrawn: cells are moved by whole pixels, and only `--max-cell` resamples.
 """
 
 from __future__ import annotations
@@ -59,6 +60,7 @@ class Strip:
     fps: float
     loop: bool
     body_h: int | None
+    periodic: bool = True
 
 
 @dataclass(frozen=True)
@@ -102,7 +104,9 @@ def read_strip(state: str, path: Path, *, flip: bool = False) -> Strip:
         cells = [c.transpose(Image.Transpose.FLIP_LEFT_RIGHT) for c in cells]
     fps = float(meta.get("fps") or 0) or (1000.0 / float(meta["delay_ms"]))
     body_h = meta.get("body_h")
-    return Strip(state, meta_path, cells, fps, bool(meta.get("loop")), int(body_h) if body_h else None)
+    loop = bool(meta.get("loop"))
+    periodic = loop and meta.get("kind", "periodic") == "periodic"  # a strip from before `kind` is a cycle
+    return Strip(state, meta_path, cells, fps, loop, int(body_h) if body_h else None, periodic)
 
 
 def _alpha(cell: Image.Image) -> np.ndarray:
@@ -138,10 +142,10 @@ def _loop_ground(bottoms: list[int], heights: list[int]) -> int:
 
 
 def ground_anchor(strip: Strip) -> Anchor:
-    """The state's feet point (module docstring): a loop's lowest row and mean centroid, a once cut's first frame."""
+    """The state's feet point (module docstring): a periodic loop's lowest row and mean centroid, else the first frame's."""
     boxes = [_bbox(c) for c in strip.cells]
     xs = [_centroid_x(c) for c in strip.cells]
-    if strip.loop:
+    if strip.periodic:
         bottoms = [b[3] for b in boxes if b is not None]
         known = [x for x in xs if x is not None]
         if not bottoms:
@@ -281,7 +285,7 @@ def build(
     warnings: list[str] = []
     for strip, anchor in zip(strips, anchors):
         below = [i for i, c in enumerate(strip.cells) if (b := _bbox(c)) is not None and b[3] > anchor.y]
-        if strip.loop and below:  # a cut played once may fall below its first frame: that is its motion
+        if strip.periodic and below:  # a cut played once may fall below its first frame: that is its motion
             warnings.append(f"{strip.state}: frame(s) {', '.join(map(str, below))} reach below the ground the other "
                             "frames stand on (an effect drawn under the feet?): left out of the ground line, they "
                             "hang below sprite.y")
