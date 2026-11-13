@@ -152,7 +152,8 @@ export function showGallery(slot: HTMLElement, items: GalleryItem[], onPick: (na
   const w = cols * (CELL_W + GAP) - GAP;
   const h = Math.max(1, Math.ceil(items.length / cols)) * (CELL_H + GAP) - GAP;
   if (!game) {
-    game = new Phaser.Game({ type: Phaser.AUTO, parent: host, width: w, height: h, backgroundColor: '#15181e', scene: [GalleryScene], banner: false });
+    game = new Phaser.Game({ type: Phaser.AUTO, parent: host, width: w, height: h, backgroundColor: '#15181e', scene: [GalleryScene], banner: false,
+      input: { mouse: { preventDefaultWheel: false } } }); // let the wheel scroll the page over the canvas
   } else if (game.scale.width !== w || game.scale.height !== h) {
     game.scale.resize(w, h);
   }

@@ -167,6 +167,8 @@ function ensureGame(): Phaser.Game {
     backgroundColor: '#1f232b',
     scene: [PreviewScene],
     banner: false,
+    // Phaser swallows wheel events over its canvas by default, so the page would not scroll there
+    input: { mouse: { preventDefaultWheel: false } },
   });
   return game;
 }
