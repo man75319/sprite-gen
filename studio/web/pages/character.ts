@@ -1,5 +1,6 @@
 // 角色详情：规格（可改）、动作列表、新建动作、Build、「全部动作」舞台。
 import { api, fileUrl, type Character, type Job } from '../api.ts';
+import { zip } from '../zip.ts';
 import { outcome, watchJob, type Watch } from '../job.ts';
 import { showGallery, type Badge, type GalleryItem } from '../gallery.ts';
 import * as preview from '../preview.ts';
@@ -127,6 +128,33 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
     });
 
     // ---- build + stage ----
+    // the build's files zipped as they are on disk (same names: <id>.json names <id>.png as its image)
+    const downloads = h('div', { class: 'downloads' });
+    if (c.build) {
+      const base = c.build.replace(/\.meta\.json$/, '');
+      const files = [`${base}.png`, `${base}.json`, `${base}.meta.json`, `${base}.align.png`];
+      const zipBtn = h('button', { type: 'button', class: 'primary' }, `打包下载 ${cid}-atlas.zip`);
+      zipBtn.addEventListener('click', async () => {
+        zipBtn.disabled = true;
+        try {
+          const got = await Promise.all(files.map(async (rel) => {
+            const res = await fetch(fileUrl(rel, true));
+            if (!res.ok) throw new Error(`${rel}: HTTP ${res.status}`);
+            return { name: rel.split('/').pop()!, data: new Uint8Array(await res.arrayBuffer()) };
+          }));
+          const a = h('a', { href: URL.createObjectURL(zip(got)), download: `${cid}-atlas.zip` });
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+        } catch (err) {
+          buildMsg.replaceChildren(errorBox(err));
+        } finally {
+          zipBtn.disabled = false;
+        }
+      });
+      const names = files.map((rel) => rel.split('/').pop()!).join('、');
+      downloads.append(zipBtn,
+        h('div', { class: 'muted small' }, `包内：${names}。游戏里用前三个：load.atlas 吃 .png + .json，.meta.json 是动画清单（帧名前缀、帧数、帧率、锚点）；.align.png 是各动作脚底对齐的检查图。`));
+    }
     const buildMsg = h('div');
     const stageSlot = h('div', { class: 'stage' });
     const animButtons = h('div', { class: 'anim-buttons' });
@@ -156,7 +184,7 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
         items.length ? gallerySlot : h('p', { class: 'muted' }, '还没有动作。'),
         h('details', { class: 'add-action', open: !items.length },
           h('summary', {}, '＋ 新建动作'), addMsg, addForm)),
-      h('section', { class: 'panel' }, h('h2', {}, '全部动作（build 产物）'), buildBtn, buildMsg, animButtons, stageSlot),
+      h('section', { class: 'panel' }, h('h2', {}, '全部动作（build 产物）'), buildBtn, buildMsg, downloads, animButtons, stageSlot),
       h('details', { class: 'panel' }, h('summary', {}, h('h2', {}, '规格', h('small', { class: 'muted' }, `  spec r${c.spec_rev}`))), specMsg, specForm),
     );
 
