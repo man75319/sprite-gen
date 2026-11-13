@@ -40,3 +40,6 @@ CLAUDE.md
 
 # sprite-gen defaults kept in the checkout (SPRITE_GEN_CONFIG_DIR in .env)
 /.sprite-gen-config/
+# Studio Web (docs/char.md section 5): its Node dependencies and its build.
+/studio/node_modules/
+/studio/dist/

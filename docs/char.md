@@ -2,7 +2,7 @@
 
 > Owns: 角色与动作的实体和账本（`sprite-gen char`）：锁定规格、不可变的生成版本、三样预览、Studio Web 的边界与验收 · Index: [docs/README.md](README.md)
 
-状态：CLI（第 1–3 节）已实现，`sprite_gen/char/`，测试在 `tests/char/`；Studio Web（第 5 节）待做。
+状态：CLI（第 1–3 节）已实现，`sprite_gen/char/`，测试在 `tests/char/`；Studio Web（第 5 节）已实现，`studio/`。
 
 ## 0. 为什么要这一层
 
@@ -149,7 +149,20 @@ work/chars/<id>/actions/<name>/
 - **web**（`studio/web/`）
   - 三页：角色列表 → 角色详情 → 动作详情（提示词 / 原始视频 / 最终效果 / 历史版本）。
   - 外壳用普通 DOM（这里不是小游戏环境），预览区用一个 Phaser 4 实例。
-- **启动**：`npm --prefix studio run dev`（Vite + server 一起起）。
+- **启动**：`npm --prefix studio run dev`（Vite + server 一起起），打开 <http://127.0.0.1:5273/>。
+  端口写在 `studio/server/ports.ts`；server 不带 watch，改了 server 要重启（watch 一重启，内存里的作业表就丢了）。
+  - `npm --prefix studio run dev:fake`：同样起两个进程，但 `video-set` 换成 `studio/dev/fake_film.py` 里的替身，
+    **不花钱**；账本、锁、版本、`export-phaser` 都是真的。替身 `STUDIO_FAKE_SECONDS` 秒后（默认 12）写出
+    能播的 clip、一条 strip 和 `clip.report.json`（就是计划提示词，所以 `prompt_match` 为真）；motion 里带 `FAIL`
+    就按失败版本处理。每一版颜色不同，切版本看得出来。配 `SPRITE_GEN_CHARS_DIR` 指到别处，别和真角色混在一起。
+  - Vite 的代理键写成正则 `^/api/`：写成前缀 `/api` 会连模块 `/api.ts` 一起转给 server，页面白屏。
+- **server 实现要点**（`studio/server/`）：`cli.ts` 是唯一 spawn CLI 的地方，值一律写成 `--flag=value` 一个
+  argv 元素（以 `-` 开头的 motion 也不会被当成别的 flag）；`jobs.ts` 是内存作业表，同一角色有作业在跑时直接
+  409、不 spawn；`/files/*` 解码后 `resolve`、再 `realpath`，两次都得在根目录内，否则 403。
+- **web 实现要点**（`studio/web/preview.ts`）：全页面一个 `Phaser.Game`，canvas 在页面之间移动、不重建；
+  每次换图集都 `scene.start` 重启场景，先删掉上一张的纹理、json 和 anims，纹理 key 带序号和时间戳。
+  重启后的场景是**同一个对象**，上一次的 sprite 字段要先清掉：`update()` 摸到已销毁的 sprite 会抛异常，
+  主循环随之停下，画面定格在上一张图，看起来就像「切版本没生效」。
 - **花钱的按钮**：一律先走 `--dry-run` 显示完整提示词，再二次确认才真发。
 
 ## 6. 验收（逐条可测）

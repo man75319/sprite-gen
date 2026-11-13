@@ -1,0 +1,25 @@
+{
+  "name": "sprite-gen-studio",
+  "private": true,
+  "type": "module",
+  "description": "Studio Web for `sprite-gen char` (docs/char.md section 5): a shell over the CLI, Phaser 4 for the previews",
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx server/index.ts",
+    "dev:web": "vite",
+    "dev:fake": "concurrently -k -n server,web -c blue,green \"npm:dev:server:fake\" \"npm:dev:web\"",
+    "dev:server:fake": "tsx server/index.ts --fake",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "npm run typecheck && vite build"
+  },
+  "dependencies": {
+    "phaser": "4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "concurrently": "10.0.6",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.6"
+  }
+}
