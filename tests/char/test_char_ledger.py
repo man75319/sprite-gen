@@ -85,6 +85,79 @@ def test_a_cutout_reference_is_laid_on_the_key_and_the_spec_takes_its_defaults(c
     assert json.loads((chars / "frog" / "character.json").read_text())["schema"] == ledger.CHARACTER_SCHEMA
 
 
+def _opaque(path: Path, corners, **save) -> Path:
+    """An opaque still: a bilinear background through the four corner colours (TL, TR, BL, BR), a figure on it."""
+    w, h = 300, 400
+    bg = Image.new("RGB", (w, h))
+    px = bg.load()
+    for y in range(h):
+        for x in range(w):
+            u, v = x / (w - 1), y / (h - 1)
+            px[x, y] = tuple(round(corners[0][i] * (1 - u) * (1 - v) + corners[1][i] * u * (1 - v)
+                                   + corners[2][i] * (1 - u) * v + corners[3][i] * u * v) for i in range(3))
+    bg.paste((60, 90, 170), (100, 60, 200, 340))
+    bg.paste((255, 255, 255), (140, 90, 160, 110))  # a highlight inside the figure stays opaque
+    bg.save(path, **save)
+    return path
+
+
+def _new_from(capsys, ref: Path) -> dict:
+    return char(capsys, "new", "frog", "--ref", str(ref), "--description", "The frog", "--body-height", "200")["character"]
+
+
+def _assert_cut_and_laid(root: Path, figure: tuple[int, int, int, int]) -> None:
+    """cutout.png holds the figure alone on transparency; base.png is it on the green key."""
+    with Image.open(root / "cutout.png") as cut:
+        alpha = cut.getchannel("A")
+        bbox = alpha.getbbox()  # a matte's soft erode may shave a px off the edge
+        assert all(abs(got - want) <= 1 for got, want in zip(bbox, figure)), bbox
+        cx, cy = (figure[0] + figure[2]) // 2, (figure[1] + figure[3]) // 2
+        assert alpha.getpixel((0, 0)) == 0 and alpha.getpixel((cx, cy)) == 255
+    with Image.open(root / "base.png") as base:
+        assert base.mode == "RGB"
+        assert base.getpixel((0, 0)) == (0, 255, 0) and base.getpixel((base.width - 1, base.height - 1)) == (0, 255, 0)
+
+
+def test_a_transparent_reference_is_its_own_cutout(chars, tmp_path, capsys):
+    out = _new(capsys, tmp_path)["character"]
+    assert out["ref"] == "frog/ref.png" and out["cutout"] == "frog/cutout.png" and out["base"] == "frog/base.png"
+    assert (chars / "frog" / "ref.png").read_bytes() == (tmp_path / "ref.png").read_bytes()
+    assert json.loads((chars / "frog" / "character.json").read_text())["base_from"]["cutout"] == {"route": "alpha"}
+    _assert_cut_and_laid(chars / "frog", (90, 60, 210, 360))
+
+
+@pytest.mark.parametrize("corners", [
+    [(255, 255, 255)] * 4,  # flat white
+    [(253, 253, 241), (253, 245, 232), (255, 250, 234), (235, 227, 208)],  # uneven ivory: the white matte misses a corner
+    [(0, 255, 0)] * 4,  # already on the key: cut out and laid again like any other
+], ids=["white", "ivory-gradient", "green-key"])
+def test_an_opaque_reference_is_cut_out_and_the_cutout_laid_on_the_key(chars, tmp_path, capsys, corners):
+    ref = _opaque(tmp_path / "ref.png", corners)
+    _new_from(capsys, ref)
+    root = chars / "frog"
+    assert (root / "ref.png").read_bytes() == ref.read_bytes()
+    cut = json.loads((root / "character.json").read_text())["base_from"]["cutout"]
+    assert cut["route"] != "alpha" and cut["opaque_border_px"] == 0
+    _assert_cut_and_laid(root, (100, 60, 200, 340))
+
+
+def test_a_jpeg_reference_is_kept_byte_for_byte_under_its_own_extension(chars, tmp_path, capsys):
+    ref = _opaque(tmp_path / "upload.png", [(255, 255, 255)] * 4, format="JPEG", quality=92)  # a JPEG named .png
+    out = _new_from(capsys, ref)
+    assert out["ref"] == "frog/ref.jpg" and not (chars / "frog" / "ref.png").exists()
+    assert (chars / "frog" / "ref.jpg").read_bytes() == ref.read_bytes()
+    _assert_cut_and_laid(chars / "frog", (100, 60, 200, 340))
+
+
+def test_an_opaque_reference_with_no_background_to_find_is_refused(chars, tmp_path, capsys):
+    ref = tmp_path / "ref.png"
+    Image.effect_noise((300, 400), 120).convert("RGB").save(ref)
+    capsys.readouterr()
+    assert cli.main(["char", "new", "frog", "--ref", str(ref), "--description", "x", "--body-height", "200", "--json"]) == 1
+    assert "cut-out" in json.loads(capsys.readouterr().out)["error"]
+    assert not (chars / "frog").exists()
+
+
 def test_body_height_is_required(chars, tmp_path, capsys):
     capsys.readouterr()
     assert cli.main(["char", "new", "frog", "--ref", str(_cutout(tmp_path / "r.png")), "--description", "x", "--json"]) == 1

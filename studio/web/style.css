@@ -35,6 +35,7 @@ label span { display: block; color: var(--muted); font-size: 12px; margin-bottom
 .stack-form { display: flex; flex-direction: column; gap: 8px; }
 .ref-preview { max-height: 120px; max-width: 100%; }
 .ref-preview:not([src]), .ref-preview[src=""] { display: none; }
+.panel.drop-target { border-color: var(--accent); border-style: dashed; background: #1e293b; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .card { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; color: var(--text); text-decoration: none; }
 .card:hover { border-color: var(--accent); }
@@ -57,6 +58,8 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 td.motion { max-width: 380px; color: var(--muted); }
 .char-head { display: flex; gap: 12px; align-items: center; }
+.char-head figure.still { margin: 0; text-align: center; }
+.char-head figure.still figcaption { color: var(--muted); font-size: 12px; }
 .char-head img { height: 120px; background: repeating-conic-gradient(#2a2f38 0 25%, #20242c 0 50%) 0 0 / 16px 16px; border-radius: 6px; }
 .action-layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
 @media (max-width: 860px) { .action-layout { grid-template-columns: 1fr; } }

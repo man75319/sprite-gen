@@ -29,7 +29,7 @@ Web 只负责编排和展示，最终效果用 Phaser 4 播放，与 TestPhaser 
 
 | 子命令 | 作用 | 花钱 |
 |---|---|---|
-| `char new <id> --ref <png> --description "…" --body-height N [规格项…]` | 建角色：复制参考图；参考图带透明底时铺到纯色 key 上（`scripts/myautosprite/make_key_canvas.py` 的逻辑，收进 `sprite_gen/char/` 成为函数）；写 `character.json` | 否 |
+| `char new <id> --ref <图片> --description "…" --body-height N [规格项…]` | 建角色：原图逐字节存为 `ref.<原扩展名>`；生成透明背景的 `cutout.png`（原图带透明就原样用，不透明就自动 `cutout`：先 auto，边缘没抠干净再试 measured，抠不出背景才拒绝）；把 `cutout.png` 铺到 key 色上得到 `base.png`（`scripts/myautosprite/make_key_canvas.py` 的逻辑）；写 `character.json` | 否 |
 | `char list` / `char show <id>` | 列角色 / 看角色（规格、动作、每个动作的当前版本与是否「旧规格」） | 否 |
 | `char spec <id> [规格项…] [--description "…"]` | 改规格或描述词（见第 2 节「改规格」） | 否 |
 | `char action add <id> <name> --state <s> --motion "…" [--action-seconds S] [--dry-run]` | 建动作并生成第 1 版；`--dry-run` 只打印将发送的完整提示词 | 是（dry-run 否） |
@@ -64,8 +64,9 @@ deer 的 idle / walk / attack / death 四条已和当初真实发出的提示词
 ```
 work/chars/<id>/
   character.json      schema、description、spec{…}、spec_rev、actions 顺序
-  ref.png             用户给的参考图（原样）
-  base.png            铺在 key 色上的底图（video-set --base side=base.png）
+  ref.<ext>           用户给的原图，逐字节、扩展名按它本身的格式（png / jpg / webp）
+  cutout.png          透明背景的角色图，之后的步骤都从它出发（Studio 角色页和原图并排显示）
+  base.png            cutout.png 铺在 key 色上的底图（video-set --base side=base.png）
   actions/<name>/…    见第 3 节
   build/              char build 的产物
   _trash/             rm 移进来的动作

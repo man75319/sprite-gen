@@ -61,6 +61,8 @@ export interface Character {
   spec: Spec;
   spec_rev: number;
   ref: string;
+  /** The reference with a transparent background; null on a character made before it was kept. */
+  cutout: string | null;
   base: string;
   action_names: string[];
   busy: Busy | null;

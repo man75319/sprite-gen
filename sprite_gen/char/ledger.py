@@ -2,7 +2,9 @@
 """What `sprite-gen char` keeps on disk (docs/char.md sections 2 and 3).
 
     <chars>/<id>/character.json          schema, description, spec, spec_rev, actions (their order)
-    <chars>/<id>/ref.png, base.png       the reference as given, and the still video-set films (on the key)
+    <chars>/<id>/ref.<ext>               the reference as given, byte for byte, under its own format's extension
+    <chars>/<id>/cutout.png              the reference with a transparent background: every later step starts here
+    <chars>/<id>/base.png                the cut-out laid on the key: the still video-set films
     <chars>/<id>/actions/<name>/action.json
     <chars>/<id>/actions/<name>/vN/      one video-set run, never rewritten after it ends
     <chars>/<id>/build/                  `char build`

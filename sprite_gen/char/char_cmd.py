@@ -150,37 +150,88 @@ def _spec_from(kwargs: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     return spec
 
 
-def key_still(ref: Path, out: Path, key: str) -> dict[str, Any]:
-    """The still video-set films: a cut-out laid on the key (as make_key_canvas.py lays it), an opaque still whose
-    corners are already that key copied as it is."""
+def open_ref(ref: Path) -> tuple[Image.Image, str]:
+    """The reference as an image, and the extension its own format is kept under (`ref.jpg` for a JPEG)."""
     try:
         image = Image.open(ref)
         image.load()
     except OSError as exc:
         raise CharError(f"--ref {ref}: not an image ({exc})") from None
+    fmt = (image.format or ref.suffix.lstrip(".") or "png").lower()
+    return image, ".jpg" if fmt == "jpeg" else f".{fmt}"
+
+
+CUT_BORDER_MAX = 0.5  # share of the border a cut-out may leave opaque (feet on the bottom edge); more is no background
+
+
+def make_cutout(ref: Path, image: Image.Image, out: Path) -> dict[str, Any]:
+    """The reference with a transparent background, saved as `out`: every later step starts from it.
+
+    A reference that already has transparency is kept as it is (route `alpha`). An opaque one goes through `cutout`:
+    `--key auto` first (white / ivory / a chroma key / any flat colour); when that leaves opaque pixels on the image
+    border (a gradient or a darker corner the white matte's corner flood-fill does not reach) the measured matte is
+    tried too and the cleaner border wins. Refuses when neither finds a background, or most of the border is still
+    opaque."""
     rgba = image.convert("RGBA")
-    alpha = rgba.getchannel("A")
-    if alpha.getextrema()[0] < 255:
-        c = KEY_CANVAS
-        alpha = alpha.point(lambda a: a if a > c["alpha_floor"] else 0)
-        rgba.putalpha(alpha)
-        box = alpha.getbbox()
-        if box is None:
-            raise CharError(f"--ref {ref}: nothing opaque to place")
-        subject = rgba.crop(box)
-        scale = c["height"] / subject.height
-        subject = subject.resize((max(1, round(subject.width * scale)), c["height"]), Image.LANCZOS)
-        canvas = Image.new("RGBA", (c["size"], c["size"]), (*KEYS[key], 255))
-        canvas.alpha_composite(subject, ((c["size"] - subject.width) // 2, c["baseline"] - subject.height))
-        canvas.convert("RGB").save(out)
-        return {"laid_on_key": True, "subject": [subject.width, subject.height]}
-    try:
-        corner = canvas_mod.corner_key(rgba)
-        canvas_mod.resolve_key(corner, key)
-    except SystemExit as exc:
-        raise CharError(f"--ref {ref}: an opaque still must stand on a flat {key} key ({exc}); give a cut-out (transparent PNG) instead") from None
-    rgba.convert("RGB").save(out)
-    return {"laid_on_key": False, "corner": list(corner)}
+    if rgba.getchannel("A").getextrema()[0] < 255:
+        rgba.save(out)
+        return {"route": "alpha"}
+    best: tuple[int, Image.Image, dict[str, Any]] | None = None
+    errors = []
+    for route in ("auto", "measured"):
+        trial = out.with_name(f"{out.stem}-{route}{out.suffix}")
+        try:
+            with contextlib.redirect_stdout(sys.stderr):
+                stats = cutout_mod.cutout(ref, trial, key=route)
+            with Image.open(trial) as cut:
+                cut = cut.convert("RGBA")
+        except SystemExit as exc:
+            errors.append(f"{route}: {exc}")
+            continue
+        finally:
+            trial.unlink(missing_ok=True)
+        border = _opaque_border(cut)
+        if best is None or border < best[0]:
+            best = (border, cut, stats)
+        if border == 0:
+            break
+    if best is None:
+        raise CharError(f"--ref {ref}: no background found to cut out ({'; '.join(errors)}); "
+                        "give a cut-out (transparent PNG) instead")
+    border, cut, stats = best
+    perimeter = 2 * (cut.width + cut.height) - 4
+    if border > perimeter * CUT_BORDER_MAX:
+        raise CharError(f"--ref {ref}: no background found to cut out ({border} of the {perimeter} border px still "
+                        f"opaque after route {stats.get('route')}); give a cut-out (transparent PNG) instead")
+    cut.save(out)
+    return {"route": stats.get("route"), "transparent_pct": stats.get("alpha_zero_pct"), "opaque_border_px": border}
+
+
+def _opaque_border(image: Image.Image) -> int:
+    """Pixels on the outermost ring that are not fully transparent: background a cut-out left behind."""
+    alpha = image.getchannel("A")
+    w, h = image.size
+    ring = [alpha.crop(b) for b in ((0, 0, w, 1), (0, h - 1, w, h), (0, 0, 1, h), (w - 1, 0, w, h))]
+    return sum(r.width * r.height - r.histogram()[0] for r in ring)
+
+
+def lay_on_key(cutout: Path, out: Path, key: str) -> dict[str, Any]:
+    """The still video-set films: the cut-out laid on the key, as make_key_canvas.py lays it."""
+    c = KEY_CANVAS
+    with Image.open(cutout) as image:
+        rgba = image.convert("RGBA")
+    alpha = rgba.getchannel("A").point(lambda a: a if a > c["alpha_floor"] else 0)
+    rgba.putalpha(alpha)
+    box = alpha.getbbox()
+    if box is None:
+        raise CharError(f"{cutout}: nothing opaque to place")
+    subject = rgba.crop(box)
+    scale = c["height"] / subject.height
+    subject = subject.resize((max(1, round(subject.width * scale)), c["height"]), Image.LANCZOS)
+    canvas = Image.new("RGBA", (c["size"], c["size"]), (*KEYS[key], 255))
+    canvas.alpha_composite(subject, ((c["size"] - subject.width) // 2, c["baseline"] - subject.height))
+    canvas.convert("RGB").save(out)
+    return {"subject": [subject.width, subject.height]}
 
 
 def cmd_new(kw: dict[str, Any]) -> dict[str, Any]:
@@ -195,15 +246,18 @@ def cmd_new(kw: dict[str, Any]) -> dict[str, Any]:
     if not description:
         raise CharError("--description is empty")
     spec = _spec_from(kw, {**ledger.SPEC_DEFAULTS})
+    image, ext = open_ref(ref)
+    files = {"ref": f"ref{ext}", "cutout": "cutout.png", "base": "base.png"}
     root.mkdir(parents=True, exist_ok=True)
     try:
-        shutil.copyfile(ref, root / "ref.png")
-        still = key_still(ref, root / "base.png", spec["key"])
+        shutil.copyfile(ref, root / files["ref"])
+        cut = make_cutout(ref, image, root / files["cutout"])
+        laid = lay_on_key(root / files["cutout"], root / files["base"], spec["key"])
     except BaseException:
         shutil.rmtree(root, ignore_errors=True)
         raise
     character = {"schema": ledger.CHARACTER_SCHEMA, "id": cid, "description": description, "spec": spec, "spec_rev": 1,
-                 "ref": "ref.png", "base": "base.png", "base_from": still, "actions": [], "created": ledger.now()}
+                 **files, "base_from": {"cutout": cut, **laid}, "actions": [], "created": ledger.now()}
     ledger.save_character(character)
     return {"character": _character_view(character)}
 
@@ -254,6 +308,7 @@ def _character_view(character: dict[str, Any], *, actions: bool = False) -> dict
     root = ledger.char_dir(cid)
     out = {k: character.get(k) for k in ("id", "description", "spec", "spec_rev", "created", "updated")}
     out["ref"] = ledger.rel(root / character["ref"])
+    out["cutout"] = ledger.rel(root / character["cutout"]) if character.get("cutout") else None
     out["base"] = ledger.rel(root / character["base"])
     out["action_names"] = list(character.get("actions", []))
     holder = ledger.lock_holder(cid)

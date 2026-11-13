@@ -148,6 +148,8 @@ async function logTail(res: http.ServerResponse, cid: string, action: string, n:
 
 // ---- upload ---------------------------------------------------------------------------------------------------
 
+const REF_EXT: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' };
+
 /** POST /api/chars: multipart (ref file + fields) → a temp file → `char new --ref`. */
 async function createChar(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const raw = await readBody(req);
@@ -167,7 +169,8 @@ async function createChar(req: http.IncomingMessage, res: http.ServerResponse): 
   const args = ['new', cid, ...specArgs({ ...fields, description: fields.description ?? '' })];
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'studio-ref-'));
   try {
-    const file = path.join(dir, 'ref.png');
+    // The upload's own extension: `char new` keeps the original under it, and reads the format from the bytes anyway.
+    const file = path.join(dir, `ref${REF_EXT[ref.type] ?? '.png'}`);
     await fs.writeFile(file, Buffer.from(await ref.arrayBuffer()));
     await cli(res, [...args.slice(0, 2), `--ref=${file}`, ...args.slice(2)]);
   } finally {
