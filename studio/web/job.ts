@@ -79,3 +79,13 @@ export function watchJob(cid: string, jobId: string | null, onEnd: (job: Job | n
     },
   };
 }
+
+/** What a finished job comes to, for the page's notice (which outlives the re-render that follows the job). */
+export function outcome(job: Job | null): { kind: 'ok' | 'error' | 'info'; node: Node } {
+  if (!job) return { kind: 'info', node: h('span', {}, '后台作业已结束。') };
+  const label = `${job.kind === 'add' ? '新建' : '重新生成'} ${job.action}`;
+  const version = (job.result?.version as { version?: number } | undefined)?.version;
+  if (job.state === 'done') return { kind: 'ok', node: h('span', {}, `${label} 完成${version ? `：v${version}，已设为当前` : ''}。`) };
+  const error = String(job.result?.error ?? '') || job.stderrTail || '没有输出';
+  return { kind: 'error', node: h('div', {}, h('div', {}, `${label} 失败${version ? `（v${version}）` : ''}：`), h('pre', {}, error)) };
+}

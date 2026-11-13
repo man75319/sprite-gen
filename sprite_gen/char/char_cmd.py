@@ -330,7 +330,7 @@ def cmd_action_regen(kw: dict[str, Any]) -> dict[str, Any]:
         action["motion"] = kw["motion"].strip()
     if kw.get("action_seconds") is not None:
         action["action_seconds"] = _action_seconds(kw["action_seconds"])
-    n = max(action["versions"], default=0) + 1
+    n = ledger.next_version(cid, name, action)
     if kw.get("dry_run"):
         return {"dry_run": True, **_plan(character, action, ledger.version_dir(cid, name, n))}
     with ledger.locked(cid, f"action regen {name}"):
@@ -350,7 +350,7 @@ def run_video_set(argv: list[str], log: Path) -> int:
 def _film(character: dict[str, Any], action: dict[str, Any]) -> dict[str, Any]:
     """One version: video-set into vN (its own out-dir), then the action's own atlas into vN/preview. Held under the lock."""
     cid, name = character["id"], action["name"]
-    n = max(action["versions"], default=0) + 1
+    n = ledger.next_version(cid, name, action)
     vdir = ledger.version_dir(cid, name, n)
     vdir.mkdir(parents=True, exist_ok=False)
     plan = _plan(character, action, vdir)
@@ -362,7 +362,12 @@ def _film(character: dict[str, Any], action: dict[str, Any]) -> dict[str, Any]:
     }
     ledger.write_json(vdir / "version.json", version)
     action["versions"].append(n)
-    ledger.save_action(cid, action)
+    try:
+        ledger.save_action(cid, action)
+    except OSError as exc:  # nothing filmed yet: say so in the version, which next_version steps past
+        version.update(status="failed", ok=False, error=f"not listed in action.json before filming: {exc}")
+        ledger.write_json(vdir / "version.json", version)
+        raise
     t0 = time.monotonic()
     log = vdir / "video-set.log"
     try:

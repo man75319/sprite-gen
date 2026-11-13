@@ -69,9 +69,28 @@ def now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
+# On Windows a file another process has open cannot be replaced, and one being replaced cannot be opened: both
+# fail with PermissionError for a moment. The Studio runs `char show` every second or so while a job writes
+# action.json, so each side waits the other out instead of failing the job (that is how a regen once died
+# before filming, leaving its vN behind).
+SHARING_RETRIES = 40
+SHARING_WAIT_S = 0.05
+
+
+def _retry_sharing(fn):
+    for attempt in range(SHARING_RETRIES):
+        try:
+            return fn()
+        except PermissionError:
+            if attempt == SHARING_RETRIES - 1:
+                raise
+            time.sleep(SHARING_WAIT_S)
+    raise AssertionError("unreachable")
+
+
 def read_json(path: Path) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(_retry_sharing(lambda: path.read_text(encoding="utf-8")))
     except FileNotFoundError:
         raise CharError(f"{path} not found") from None
     except ValueError as exc:
@@ -83,7 +102,8 @@ def read_json(path: Path) -> dict[str, Any]:
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    _retry_sharing(lambda: atomic_write_text(path, text))
 
 
 # ---- characters -------------------------------------------------------------------------------------------------
@@ -137,6 +157,16 @@ def save_action(cid: str, data: dict[str, Any]) -> None:
 
 def version_dir(cid: str, name: str, n: int) -> Path:
     return action_dir(cid, name) / f"v{int(n)}"
+
+
+def next_version(cid: str, name: str, action: dict[str, Any]) -> int:
+    """The number the next version takes: past every listed version and every vN folder on disk, so a folder a
+    failed run left behind without listing it is never reused (version numbers only grow)."""
+    on_disk = []
+    root = action_dir(cid, name)
+    if root.is_dir():
+        on_disk = [int(p.name[1:]) for p in root.iterdir() if p.is_dir() and re.fullmatch(r"v\d+", p.name)]
+    return max([*action.get("versions", []), *on_disk], default=0) + 1
 
 
 def load_version(cid: str, name: str, n: int) -> dict[str, Any]:

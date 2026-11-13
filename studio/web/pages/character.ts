@@ -1,6 +1,6 @@
 // 角色详情：规格（可改）、动作列表、新建动作、Build、「全部动作」舞台。
 import { api, fileUrl, type Character, type Job } from '../api.ts';
-import { watchJob, type Watch } from '../job.ts';
+import { outcome, watchJob, type Watch } from '../job.ts';
 import { showGallery, type Badge, type GalleryItem } from '../gallery.ts';
 import * as preview from '../preview.ts';
 import { LABELS, specFields } from '../specForm.ts';
@@ -10,6 +10,8 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
   let watch: Watch | null = null;
   let alive = true;
   const notice = h('div'); // survives re-renders: the result of the last action taken here
+  // the job this page just started: watched even if it is over before the page re-renders (a fast failure)
+  let started: string | null = null;
 
   const render = async (): Promise<void> => {
     watch?.stop();
@@ -35,9 +37,13 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
         h('small', { class: 'muted' }, `spec r${c.spec_rev}`)));
 
     const jobSlot = h('div');
-    if (busy) {
-      watch = watchJob(cid, job?.id ?? null, () => {
-        if (alive) void render();
+    if (busy || started) {
+      watch = watchJob(cid, job?.id ?? started, (ended) => {
+        if (!alive) return;
+        started = null;
+        const o = outcome(ended);
+        flash(notice, o.node, o.kind);
+        void render();
       });
       jobSlot.append(watch.el);
     }
@@ -112,7 +118,7 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
       try {
         const dry = await api.addDry(cid, body);
         if (!(await confirmSpend(`${cid}/${body.name}`, dry.prompt, dry.argv))) return;
-        await api.add(cid, body);
+        started = (await api.add(cid, body)).jobId;
         flash(notice, `已开始生成 ${body.name}`, 'info');
         await render();
       } catch (err) {

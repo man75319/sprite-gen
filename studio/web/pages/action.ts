@@ -1,7 +1,7 @@
 // 动作详情（docs/char.md section 4）：任一版本的三样 —— 提示词 / 原始视频 / 最终效果 —— 加历史版本。
 // 切版本时三样一起切；「设为当前」走 `char action use`。
 import { api, fileJson, fileUrl, type Action, type Character, type Job, type Version } from '../api.ts';
-import { watchJob, type Watch } from '../job.ts';
+import { outcome, watchJob, type Watch } from '../job.ts';
 import * as preview from '../preview.ts';
 import { confirmDialog, confirmSpend, errorBox, flash, fmtTime, formValues, go, h } from '../ui.ts';
 
@@ -18,6 +18,8 @@ export async function actionPage(root: HTMLElement, cid: string, name: string, w
   let watch: Watch | null = null;
   let alive = true;
   const notice = h('div');
+  // the job this page just started: watched even if it is over before the page re-renders (a fast failure)
+  let started: string | null = null;
   const hashFor = (n: number) => `#/c/${encodeURIComponent(cid)}/a/${encodeURIComponent(name)}/v/${n}`;
 
   const render = async (): Promise<void> => {
@@ -43,9 +45,12 @@ export async function actionPage(root: HTMLElement, cid: string, name: string, w
     const v = a.versions.find((x) => x.version === shownN) ?? null;
 
     const jobSlot = h('div');
-    if (busy) {
-      watch = watchJob(cid, job?.id ?? null, () => {
+    if (busy || started) {
+      watch = watchJob(cid, job?.id ?? started, (ended) => {
         if (!alive) return;
+        started = null;
+        const o = outcome(ended);
+        flash(notice, o.node, o.kind);
         wanted = null; // the new version becomes current when it succeeds; show that
         void render();
       });
@@ -107,7 +112,7 @@ export async function actionPage(root: HTMLElement, cid: string, name: string, w
       try {
         const dry = await api.regenDry(c.id, a.name, body);
         if (!(await confirmSpend(`${c.id}/${a.name} 新一版`, dry.prompt, dry.argv))) return;
-        await api.regen(c.id, a.name, body);
+        started = (await api.regen(c.id, a.name, body)).jobId;
         flash(notice, '已开始重新生成；旧版保留。', 'info');
         await render();
       } catch (err) {

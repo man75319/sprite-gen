@@ -178,3 +178,29 @@ def test_one_job_per_character(chars, tmp_path, capsys, films, monkeypatch):
     monkeypatch.setattr(ledger, "pid_alive", lambda pid: False)  # its process is gone: the lock is taken over
     assert char(capsys, "action", "add", "frog", "idle", "--state", "idle", "--motion", "m")["version"]["ok"]
     assert not (chars / "frog" / ".lock").exists()
+
+
+def test_a_version_folder_left_unlisted_is_never_reused(chars, tmp_path, capsys, films):
+    _new(capsys, tmp_path)
+    char(capsys, "action", "add", "frog", "idle", "--state", "idle", "--motion", "breathes")
+    (chars / "frog/actions/idle/v2").mkdir()  # a run that died between making v2 and listing it
+    dry = char(capsys, "action", "regen", "frog", "idle", "--dry-run")
+    assert dry["argv"][dry["argv"].index("--out-dir") + 1].endswith("v3")
+    out = char(capsys, "action", "regen", "frog", "idle")
+    assert out["version"]["version"] == 3 and out["action"]["current"] == 3
+
+
+def test_a_file_held_open_by_another_process_is_waited_for(chars, tmp_path, monkeypatch):
+    """Windows refuses to replace a file another process is reading (the Studio polls `char show`)."""
+    calls = []
+
+    def flaky(path, text):
+        calls.append(path)
+        if len(calls) < 3:
+            raise PermissionError(13, "Access is denied")
+        path.write_text(text, encoding="utf-8")
+
+    monkeypatch.setattr(ledger, "atomic_write_text", flaky)
+    monkeypatch.setattr(ledger, "SHARING_WAIT_S", 0)
+    ledger.write_json(tmp_path / "a.json", {"x": 1})
+    assert len(calls) == 3 and ledger.read_json(tmp_path / "a.json") == {"x": 1}
