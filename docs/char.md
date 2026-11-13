@@ -149,7 +149,7 @@ work/chars/<id>/actions/<name>/
 - **web**（`studio/web/`）
   - 三页：角色列表 → 角色详情 → 动作详情（提示词 / 原始视频 / 最终效果 / 历史版本）。
   - 外壳用普通 DOM（这里不是小游戏环境），预览区用一个 Phaser 4 实例。
-- **启动**：`npm --prefix studio run dev`（Vite + server 一起起），打开 <http://127.0.0.1:5273/>。
+- **启动**：`npm --prefix studio run dev`（Vite + server 一起起），打开 <http://127.0.0.1:5391/>。
   端口写在 `studio/server/ports.ts`；server 不带 watch，改了 server 要重启（watch 一重启，内存里的作业表就丢了）。
   - `npm --prefix studio run dev:fake`：同样起两个进程，但 `video-set` 换成 `studio/dev/fake_film.py` 里的替身，
     **不花钱**；账本、锁、版本、`export-phaser` 都是真的。替身 `STUDIO_FAKE_SECONDS` 秒后（默认 12）写出
