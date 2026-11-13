@@ -149,8 +149,9 @@ work/chars/<id>/actions/<name>/
 - **web**（`studio/web/`）
   - 三页：角色列表 → 角色详情 → 动作详情（提示词 / 原始视频 / 最终效果 / Sheet 图 / 历史版本）。
     Sheet 图就是该版 `preview/<id>.png` 本身，和最终效果、游戏里 `load.atlas` 吃的是同一个文件。
-  - 角色详情的 build 一栏可以「打包下载」：build 目录下的 png / json / meta.json / align.png 原名打进一个 zip，
-    在浏览器里打（`studio/web/zip.ts`，只存不压），不经 server。
+  - 角色详情的 build 一栏可以「打包下载」：build 目录下的 png / json / meta.json 原名打进一个 zip，
+    在浏览器里打（`studio/web/zip.ts`，只存不压），不经 server。`align.png`（各动作脚底对齐的检查图）
+    不进包，只在这一栏里显示。
   - 角色详情里的动作是一块网格：每格循环播该动作当前版的 preview 图集，标着版本号和「旧规格 / 失败 / 生成中」，
     点一格进动作详情；state、motion、删除都在动作详情里。
   - 外壳用普通 DOM（这里不是小游戏环境），预览用 Phaser 4。

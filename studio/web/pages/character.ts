@@ -130,9 +130,14 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
     // ---- build + stage ----
     // the build's files zipped as they are on disk (same names: <id>.json names <id>.png as its image)
     const downloads = h('div', { class: 'downloads' });
+    // export-phaser's alignment check: every action's feet against one line (not shipped, only looked at)
+    const align = h('div');
     if (c.build) {
       const base = c.build.replace(/\.meta\.json$/, '');
-      const files = [`${base}.png`, `${base}.json`, `${base}.meta.json`, `${base}.align.png`];
+      const files = [`${base}.png`, `${base}.json`, `${base}.meta.json`];
+      const alignSrc = fileUrl(`${base}.align.png`, true);
+      align.append(h('h3', {}, '脚底对齐检查', h('small', { class: 'muted' }, `  ${base}.align.png · 点图看原尺寸`)),
+        h('a', { href: alignSrc, target: '_blank', rel: 'noopener', class: 'sheet-wrap' }, h('img', { src: alignSrc, alt: 'align', class: 'sheet' })));
       const zipBtn = h('button', { type: 'button', class: 'primary' }, `打包下载 ${cid}-atlas.zip`);
       zipBtn.addEventListener('click', async () => {
         zipBtn.disabled = true;
@@ -153,7 +158,7 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
       });
       const names = files.map((rel) => rel.split('/').pop()!).join('、');
       downloads.append(zipBtn,
-        h('div', { class: 'muted small' }, `包内：${names}。游戏里用前三个：load.atlas 吃 .png + .json，.meta.json 是动画清单（帧名前缀、帧数、帧率、锚点）；.align.png 是各动作脚底对齐的检查图。`));
+        h('div', { class: 'muted small' }, `包内：${names}。load.atlas 吃 .png + .json，.meta.json 是动画清单（帧名前缀、帧数、帧率、锚点）。`));
     }
     const buildMsg = h('div');
     const stageSlot = h('div', { class: 'stage' });
@@ -184,7 +189,7 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
         items.length ? gallerySlot : h('p', { class: 'muted' }, '还没有动作。'),
         h('details', { class: 'add-action', open: !items.length },
           h('summary', {}, '＋ 新建动作'), addMsg, addForm)),
-      h('section', { class: 'panel' }, h('h2', {}, '全部动作（build 产物）'), buildBtn, buildMsg, downloads, animButtons, stageSlot),
+      h('section', { class: 'panel' }, h('h2', {}, '全部动作（build 产物）'), buildBtn, buildMsg, downloads, animButtons, stageSlot, align),
       h('details', { class: 'panel' }, h('summary', {}, h('h2', {}, '规格', h('small', { class: 'muted' }, `  spec r${c.spec_rev}`))), specMsg, specForm),
     );
 
