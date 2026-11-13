@@ -215,7 +215,21 @@ export async function actionPage(root: HTMLElement, cid: string, name: string, w
       stage.replaceChildren(h('p', { class: 'muted' }, v.status === 'running' ? '生成中…' : '这一版没有 preview 图集。'));
     }
 
-    return h('div', {}, h('h2', {}, `v${v.version}`), info, prompts, videoBox, result);
+    // 4. the sheet: the atlas png itself (the file the preview above and the game's load.atlas take)
+    const sheet = h('section', { class: 'panel' }, h('h3', {}, '4. Sheet 图', h('small', { class: 'muted' }, files.png ? `  ${files.png}` : '')));
+    if (files.png) {
+      const src = fileUrl(files.png, true);
+      const size = h('small', { class: 'muted' });
+      const img = h('img', { src, alt: 'sheet', class: 'sheet' });
+      img.addEventListener('load', () => {
+        size.textContent = `${img.naturalWidth}×${img.naturalHeight}px · 点图看原尺寸`;
+      });
+      sheet.append(size, h('a', { href: src, target: '_blank', rel: 'noopener', class: 'sheet-wrap' }, img));
+    } else {
+      sheet.append(h('p', { class: 'muted' }, v.status === 'running' ? '生成中…' : '这一版没有 sheet 图。'));
+    }
+
+    return h('div', {}, h('h2', {}, `v${v.version}`), info, prompts, videoBox, result, sheet);
   }
 
   await render();

@@ -92,3 +92,5 @@ details.add-action[open] > summary { margin-bottom: 10px; }
 .action-about dd { margin: 0; }
 .downloads { margin: 8px 0; }
 .small { font-size: 12px; }
+.sheet-wrap { display: block; margin-top: 6px; overflow: auto; max-height: 520px; border-radius: 6px; background: repeating-conic-gradient(#2a2f38 0 25%, #20242c 0 50%) 0 0 / 16px 16px; }
+img.sheet { display: block; max-width: 100%; image-rendering: pixelated; }
