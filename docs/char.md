@@ -65,7 +65,7 @@ deer 的 idle / walk / attack / death 四条已和当初真实发出的提示词
 work/chars/<id>/
   character.json      schema、description、spec{…}、spec_rev、actions 顺序
   ref.<ext>           用户给的原图，逐字节、扩展名按它本身的格式（png / jpg / webp）
-  cutout.png          透明背景的角色图，之后的步骤都从它出发（Studio 角色页和原图并排显示）
+  cutout.png          透明背景的角色图，之后的步骤都从它出发（Studio 角色页和原图并排显示）；自动抠的图会去掉离角色较远的孤立小块（水印、纸面噪点）
   base.png            cutout.png 铺在 key 色上的底图（video-set --base side=base.png）
   actions/<name>/…    见第 3 节
   build/              char build 的产物

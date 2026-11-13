@@ -32,7 +32,6 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
     const header = h('header', { class: 'char-head' },
       still(c.ref, '原图', '用户给的原图（原样）'),
       c.cutout ? still(c.cutout, '透明背景', '抠掉背景的角色，之后的步骤都从它出发') : null,
-      still(c.base, '绿幕底图', '透明背景图铺在 key 色上，video-set 拍的就是它'),
       h('div', {},
         h('h1', {}, c.id, busy ? h('span', { class: 'badge busy' }, '生成中') : null),
         h('p', {}, c.description),

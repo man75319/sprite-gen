@@ -141,6 +141,24 @@ def test_an_opaque_reference_is_cut_out_and_the_cutout_laid_on_the_key(chars, tm
     _assert_cut_and_laid(root, (100, 60, 200, 340))
 
 
+def test_a_watermark_apart_from_the_figure_is_dropped_and_a_part_inside_its_box_kept(chars, tmp_path, capsys):
+    ref = tmp_path / "ref.png"
+    with Image.open(_opaque(ref, [(250, 246, 236)] * 4)) as im:
+        im = im.convert("RGB")
+    im.paste((70, 70, 70), (230, 375, 290, 390))  # a watermark in the bottom-right corner
+    im.paste((70, 70, 70), (20, 20, 24, 24))  # a speck on the paper
+    im.paste((250, 246, 236), (150, 60, 200, 150))  # a notch: the figure is an L
+    im.paste((200, 40, 40), (170, 80, 190, 100))  # a piece in the notch, apart from the figure but inside its box: kept
+    im.save(ref)
+    _new_from(capsys, ref)
+    cut = json.loads((chars / "frog" / "character.json").read_text())["base_from"]["cutout"]
+    assert cut["dropped_islands"]["count"] == 2
+    with Image.open(chars / "frog" / "cutout.png") as out:
+        alpha = out.getchannel("A")
+        assert alpha.getpixel((260, 382)) == 0 and alpha.getpixel((22, 22)) == 0 and alpha.getpixel((180, 90)) == 255
+        assert abs(alpha.getbbox()[3] - 340) <= 1  # the figure alone sets the box
+
+
 def test_a_jpeg_reference_is_kept_byte_for_byte_under_its_own_extension(chars, tmp_path, capsys):
     ref = _opaque(tmp_path / "upload.png", [(255, 255, 255)] * 4, format="JPEG", quality=92)  # a JPEG named .png
     out = _new_from(capsys, ref)

@@ -33,6 +33,7 @@ from sprite_gen.char import char_plan, ledger
 from sprite_gen.char.ledger import CharError
 from sprite_gen.compose import export_phaser
 from sprite_gen.frames import cutout as cutout_mod
+from sprite_gen.frames import extract as extract_mod
 from sprite_gen.gen.facing import FACINGS
 from sprite_gen.video import batch as batch_mod
 from sprite_gen.video import body_plan as body_mod
@@ -203,8 +204,48 @@ def make_cutout(ref: Path, image: Image.Image, out: Path) -> dict[str, Any]:
     if border > perimeter * CUT_BORDER_MAX:
         raise CharError(f"--ref {ref}: no background found to cut out ({border} of the {perimeter} border px still "
                         f"opaque after route {stats.get('route')}); give a cut-out (transparent PNG) instead")
+    dropped = _drop_islands(cut)
     cut.save(out)
-    return {"route": stats.get("route"), "transparent_pct": stats.get("alpha_zero_pct"), "opaque_border_px": border}
+    return {"route": stats.get("route"), "transparent_pct": stats.get("alpha_zero_pct"), "opaque_border_px": border,
+            **({"dropped_islands": dropped} if dropped["count"] else {})}
+
+
+ISLAND_KEEP_SHARE = 0.05  # a piece apart from the figure's box is kept when it is at least this share of the figure
+
+
+def _drop_islands(image: Image.Image) -> dict[str, int]:
+    """Clears what a matte keeps that is not the figure: a watermark in a corner, specks on the paper.
+
+    The largest opaque piece is the figure. Another piece stays when it overlaps the figure's box (an eye, a leaf
+    the lineart cuts off) or is big enough to be a part of its own (`ISLAND_KEEP_SHARE`); the rest is made
+    transparent, RGB zeroed as cutout leaves its own transparency."""
+    pieces = extract_mod.connected_components(image)
+    if len(pieces) < 2:
+        return {"count": 0, "px": 0}
+    figure = max(pieces, key=lambda c: c["area"])
+    fx0, fy0, fx1, fy1 = figure["bbox"]
+    px = image.load()
+    width = image.width
+    count = cleared = 0
+    for c in pieces:
+        x0, y0, x1, y1 = c["bbox"]
+        if c is figure or (x0 < fx1 and x1 > fx0 and y0 < fy1 and y1 > fy0) or c["area"] >= figure["area"] * ISLAND_KEEP_SHARE:
+            continue
+        for i in c["pixels"]:
+            px[i % width, i // width] = (0, 0, 0, 0)
+        count += 1
+        cleared += c["area"]
+    if count:  # the faint fringe round a dropped piece (alpha <= 16) is not part of any piece: clear it with them
+        alpha = image.getchannel("A")
+        keep = Image.new("L", image.size, 0)
+        for c in pieces:
+            x0, y0, x1, y1 = c["bbox"]
+            if px[c["pixels"][0] % width, c["pixels"][0] // width][3]:
+                keep.paste(255, (max(0, x0 - 2), max(0, y0 - 2), x1 + 2, y1 + 2))
+        faint = alpha.point(lambda a: 255 if 0 < a <= 16 else 0)
+        stray = Image.composite(Image.new("L", image.size, 0), faint, keep)
+        image.paste((0, 0, 0, 0), mask=stray)
+    return {"count": count, "px": cleared}
 
 
 def _opaque_border(image: Image.Image) -> int:
