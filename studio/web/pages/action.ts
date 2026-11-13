@@ -3,7 +3,7 @@
 import { api, fileJson, fileUrl, type Action, type Character, type Job, type Version } from '../api.ts';
 import { watchJob, type Watch } from '../job.ts';
 import * as preview from '../preview.ts';
-import { confirmSpend, errorBox, flash, fmtTime, formValues, h } from '../ui.ts';
+import { confirmDialog, confirmSpend, errorBox, flash, fmtTime, formValues, go, h } from '../ui.ts';
 
 const FRAME = 1 / 24; // Seedance films at 24
 
@@ -61,11 +61,33 @@ export async function actionPage(root: HTMLElement, cid: string, name: string, w
         x.prompt_match === false ? h('span', { class: 'badge bad' }, '提示词不一致') : null,
         h('small', {}, fmtTime(x.started))))));
 
+    const rm = async (purge: boolean) => {
+      const ok = await confirmDialog(purge ? '彻底删除' : '删除动作',
+        h('p', {}, purge ? `物理删除 ${name} 的所有版本，不可恢复。` : `把 ${name} 整个移进 ${cid}/_trash/（可以手工找回）。`),
+        purge ? '彻底删除' : '移进回收站', true);
+      if (!ok) return;
+      try {
+        await api.rm(cid, name, purge);
+        go(`#/c/${encodeURIComponent(cid)}`);
+      } catch (err) {
+        notice.replaceChildren(errorBox(err));
+      }
+    };
+    const about = h('section', { class: 'panel action-about' },
+      h('dl', {},
+        h('dt', {}, 'state'), h('dd', {}, h('code', {}, a.state), h('span', { class: 'muted' }, '  决定提示词骨架、播放方式、切循环的方式')),
+        h('dt', {}, 'motion'), h('dd', {}, a.motion, h('small', { class: 'muted' }, '  （下一版默认用它；每一版自己用的写在下面）')),
+        h('dt', {}, 'action seconds'), h('dd', {}, a.action_seconds != null ? String(a.action_seconds) : '—')),
+      h('div', {},
+        h('button', { type: 'button', disabled: busy, onclick: () => rm(false) }, '删除动作'),
+        h('button', { type: 'button', class: 'danger', disabled: busy, onclick: () => rm(true) }, '彻底删除')));
+
     root.replaceChildren(
       back,
-      h('h1', {}, `${cid} / ${name}`, h('small', { class: 'muted' }, `  state ${a.state}`)),
+      h('h1', {}, `${cid} / ${name}`),
       notice,
       jobSlot,
+      about,
       h('div', { class: 'action-layout' },
         h('aside', {}, h('h2', {}, '历史版本'), list, regenForm(c, a, busy)),
         h('div', { class: 'version-detail' }, v ? versionDetail(a, v, busy) : h('p', { class: 'muted' }, '还没有版本。'))),

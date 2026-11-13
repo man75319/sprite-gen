@@ -148,9 +148,12 @@ work/chars/<id>/actions/<name>/
   - 静态文件只发 `work/chars/` 下的，路径解析后必须仍在该目录内；mp4 支持 Range。
 - **web**（`studio/web/`）
   - 三页：角色列表 → 角色详情 → 动作详情（提示词 / 原始视频 / 最终效果 / 历史版本）。
-  - 外壳用普通 DOM（这里不是小游戏环境），预览区用一个 Phaser 4 实例。
+  - 角色详情里的动作是一块网格：每格循环播该动作当前版的 preview 图集，标着版本号和「旧规格 / 失败 / 生成中」，
+    点一格进动作详情；state、motion、删除都在动作详情里。
+  - 外壳用普通 DOM（这里不是小游戏环境），预览用 Phaser 4。
 - **启动**：`npm --prefix studio run dev`（Vite + server 一起起），打开 <http://127.0.0.1:5391/>。
-  端口写在 `studio/server/ports.ts`；server 不带 watch，改了 server 要重启（watch 一重启，内存里的作业表就丢了）。
+  端口写在 `studio/server/ports.ts`，`STUDIO_WEB_PORT` / `STUDIO_SERVER_PORT` 可以覆盖（在用的那份旁边
+  再起一份假模式测试时用；两份同端口时请求会打到先起的那份上）。server 不带 watch，改了 server 要重启（watch 一重启，内存里的作业表就丢了）。
   - `npm --prefix studio run dev:fake`：同样起两个进程，但 `video-set` 换成 `studio/dev/fake_film.py` 里的替身，
     **不花钱**；账本、锁、版本、`export-phaser` 都是真的。替身 `STUDIO_FAKE_SECONDS` 秒后（默认 12）写出
     能播的 clip、一条 strip 和 `clip.report.json`（就是计划提示词，所以 `prompt_match` 为真）；motion 里带 `FAIL`
@@ -159,7 +162,9 @@ work/chars/<id>/actions/<name>/
 - **server 实现要点**（`studio/server/`）：`cli.ts` 是唯一 spawn CLI 的地方，值一律写成 `--flag=value` 一个
   argv 元素（以 `-` 开头的 motion 也不会被当成别的 flag）；`jobs.ts` 是内存作业表，同一角色有作业在跑时直接
   409、不 spawn；`/files/*` 解码后 `resolve`、再 `realpath`，两次都得在根目录内，否则 403。
-- **web 实现要点**（`studio/web/preview.ts`）：全页面一个 `Phaser.Game`，canvas 在页面之间移动、不重建；
+- **web 实现要点**：两个 `Phaser.Game`，各管一块 canvas，在页面之间移动、不重建 ——
+  `preview.ts` 一次放一张图集（动作页的最终效果、角色页的 build 舞台），`gallery.ts` 同时放 N 张（动作网格）。
+  两者都是：
   每次换图集都 `scene.start` 重启场景，先删掉上一张的纹理、json 和 anims，纹理 key 带序号和时间戳。
   重启后的场景是**同一个对象**，上一次的 sprite 字段要先清掉：`update()` 摸到已销毁的 sprite 会抛异常，
   主循环随之停下，画面定格在上一张图，看起来就像「切版本没生效」。

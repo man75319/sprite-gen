@@ -82,3 +82,11 @@ video { width: 100%; max-height: 420px; background: black; border-radius: 6px; }
 dialog.modal { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; max-width: min(900px, 92vw); width: 900px; }
 dialog.modal::backdrop { background: rgba(0, 0, 0, 0.6); }
 dialog.modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.gallery canvas { display: block; max-width: 100%; }
+.gallery { margin-bottom: 8px; }
+details.add-action > summary, details.panel > summary { cursor: pointer; color: #93c5fd; margin: 4px 0; }
+details.panel > summary h2 { display: inline; margin: 0; }
+details.add-action[open] > summary { margin-bottom: 10px; }
+.action-about dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0 0 8px; }
+.action-about dt { color: var(--muted); }
+.action-about dd { margin: 0; }

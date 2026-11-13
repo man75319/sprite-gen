@@ -1,9 +1,10 @@
 // 角色详情：规格（可改）、动作列表、新建动作、Build、「全部动作」舞台。
 import { api, fileUrl, type Character, type Job } from '../api.ts';
 import { watchJob, type Watch } from '../job.ts';
+import { showGallery, type Badge, type GalleryItem } from '../gallery.ts';
 import * as preview from '../preview.ts';
 import { LABELS, specFields } from '../specForm.ts';
-import { NAME_PATTERN, confirmDialog, confirmSpend, errorBox, flash, formValues, h } from '../ui.ts';
+import { NAME_PATTERN, confirmSpend, errorBox, flash, formValues, go, h } from '../ui.ts';
 
 export async function characterPage(root: HTMLElement, cid: string): Promise<() => void> {
   let watch: Watch | null = null;
@@ -79,36 +80,22 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
       }
     });
 
-    // ---- actions ----
-    const rows = (c.actions ?? []).map((a) => {
+    // ---- actions: a grid that plays each action's current version; a click opens it ----
+    const actionHash = (name: string) => `#/c/${encodeURIComponent(cid)}/a/${encodeURIComponent(name)}`;
+    const items: GalleryItem[] = (c.actions ?? []).map((a) => {
       const cur = a.versions.find((v) => v.version === a.current);
       const last = a.versions[a.versions.length - 1];
-      const rm = async (purge: boolean) => {
-        const ok = await confirmDialog(purge ? '彻底删除' : '删除动作',
-          h('p', {}, purge ? `物理删除 ${a.name} 的所有版本，不可恢复。` : `把 ${a.name} 整个移进 ${cid}/_trash/。`), purge ? '彻底删除' : '移进回收站', true);
-        if (!ok) return;
-        try {
-          const r = await api.rm(cid, a.name, purge);
-          flash(notice, r.purged ? `已彻底删除 ${r.removed}` : `已移进 ${r.trash}`, 'ok');
-          await render();
-        } catch (err) {
-          notice.replaceChildren(errorBox(err));
-        }
-      };
-      return h('tr', {},
-        h('td', {}, h('a', { href: `#/c/${encodeURIComponent(cid)}/a/${encodeURIComponent(a.name)}` }, a.name)),
-        h('td', {}, a.state),
-        h('td', { class: 'motion' }, a.motion),
-        h('td', {}, a.current ? `v${a.current}` : '—', a.current_stale ? h('span', { class: 'badge stale' }, '旧规格') : null,
-          cur && cur.prompt_match === false ? h('span', { class: 'badge bad' }, '提示词不一致') : null),
-        h('td', {}, `${a.versions.length} 版`, last ? h('span', { class: `badge ${last.status}` }, `v${last.version} ${last.status}`) : null),
-        h('td', {},
-          h('button', { type: 'button', disabled: busy, onclick: () => rm(false) }, '删除'),
-          h('button', { type: 'button', class: 'danger', disabled: busy, onclick: () => rm(true) }, '彻底删除')));
+      const badges: Badge[] = [];
+      if (a.current_stale) badges.push({ text: '旧规格', color: 0xf59e0b });
+      if (cur?.prompt_match === false) badges.push({ text: '提示词不一致', color: 0xf87171 });
+      if (last?.status === 'running') badges.push({ text: `v${last.version} 生成中`, color: 0xfacc15 });
+      else if (last && last.version !== a.current && last.status === 'failed') badges.push({ text: `v${last.version} 失败`, color: 0xf87171 });
+      const f = cur?.ok ? cur.files : null;
+      const files = f?.png && f.json && f['meta.json'] ? { png: f.png, json: f.json, meta: f['meta.json'] } : null;
+      return { name: a.name, version: a.current, files, badges,
+        note: last?.status === 'running' && !a.current ? '第一版生成中…' : undefined };
     });
-    const table = rows.length
-      ? h('table', {}, h('thead', {}, h('tr', {}, ...['动作', 'state', 'motion', '当前', '版本', ''].map((t) => h('th', {}, t)))), h('tbody', {}, ...rows))
-      : h('p', { class: 'muted' }, '还没有动作。');
+    const gallerySlot = h('div', { class: 'gallery' });
 
     // ---- new action ----
     const addMsg = h('div');
@@ -158,11 +145,16 @@ export async function characterPage(root: HTMLElement, cid: string): Promise<() 
       header,
       notice,
       jobSlot,
-      h('section', { class: 'panel' }, h('h2', {}, '动作'), table),
-      h('section', { class: 'panel' }, h('h2', {}, '新建动作'), addMsg, addForm),
+      h('section', { class: 'panel' },
+        h('h2', {}, '动作', h('small', { class: 'muted' }, '  每格播当前版，点开看详情 / 历史版本 / 重新生成 / 删除')),
+        items.length ? gallerySlot : h('p', { class: 'muted' }, '还没有动作。'),
+        h('details', { class: 'add-action', open: !items.length },
+          h('summary', {}, '＋ 新建动作'), addMsg, addForm)),
       h('section', { class: 'panel' }, h('h2', {}, '全部动作（build 产物）'), buildBtn, buildMsg, animButtons, stageSlot),
-      h('section', { class: 'panel' }, h('h2', {}, '规格'), specMsg, specForm),
+      h('details', { class: 'panel' }, h('summary', {}, h('h2', {}, '规格', h('small', { class: 'muted' }, `  spec r${c.spec_rev}`))), specMsg, specForm),
     );
+
+    if (items.length) await showGallery(gallerySlot, items, (name) => go(actionHash(name)));
 
     if (c.build) {
       const base = c.build.replace(/\.meta\.json$/, '');
