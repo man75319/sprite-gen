@@ -1,5 +1,5 @@
-// 动作详情（docs/char.md section 4）：任一版本的三样 —— 提示词 / 原始视频 / 最终效果 —— 加历史版本。
-// 切版本时三样一起切；「设为当前」走 `char action use`。
+// 动作详情（docs/char.md section 4）：任一版本的最终效果（Phaser）/ 提示词 / 原始视频 / Sheet 图，加历史版本。
+// 切版本时它们一起切；「设为当前」走 `char action use`。
 import { api, fileJson, fileUrl, type Action, type Character, type Job, type Version } from '../api.ts';
 import { outcome, watchJob, type Watch } from '../job.ts';
 import * as preview from '../preview.ts';
@@ -154,7 +154,7 @@ export async function actionPage(root: HTMLElement, cid: string, name: string, w
     const planned = h('pre', { class: 'prompt' }, '加载中…');
     const match = v.prompt_match;
     const prompts = h('section', { class: `panel prompts ${match === false ? 'mismatch' : ''}` },
-      h('h3', {}, '1. 提示词',
+      h('h3', {}, '2. 提示词',
         match === true ? h('span', { class: 'badge ok' }, 'prompt_match ✓') : match === false ? h('span', { class: 'badge bad' }, 'prompt_match ✗ 与计划不一致') : null),
       h('div', { class: 'cols' },
         h('div', {}, h('h4', {}, '你写的 motion'), h('pre', { class: 'prompt' }, v.motion ?? '')),
@@ -192,7 +192,7 @@ export async function actionPage(root: HTMLElement, cid: string, name: string, w
       }
     });
     const videoBox = h('section', { class: 'panel' },
-      h('h3', {}, '2. 原始视频', h('small', { class: 'muted' }, `  ${clipRel}`)),
+      h('h3', {}, '3. 原始视频', h('small', { class: 'muted' }, `  ${clipRel}`)),
       video,
       h('div', { class: 'video-controls' },
         h('button', { type: 'button', onclick: () => step(-FRAME) }, '◀ 上一帧'),
@@ -205,7 +205,7 @@ export async function actionPage(root: HTMLElement, cid: string, name: string, w
     const stage = h('div', { class: 'stage' });
     const buttons = h('div', { class: 'anim-buttons' });
     const result = h('section', { class: 'panel' },
-      h('h3', {}, '3. 最终效果（Phaser 4，', h('code', {}, `${vdir}/preview/`), '）'), buttons, stage,
+      h('h3', {}, '1. 最终效果（Phaser 4，', h('code', {}, `${vdir}/preview/`), '）'), buttons, stage,
       h('small', { class: 'muted' }, '红线 = 脚底线（meta.anchor 所在行），青色十字 = 锚点，灰框 = cell'));
     if (files.png && files.json && files['meta.json']) {
       preview.show(stage, { png: files.png, json: files.json, meta: files['meta.json'] }).then((shown) => {
@@ -229,7 +229,7 @@ export async function actionPage(root: HTMLElement, cid: string, name: string, w
       sheet.append(h('p', { class: 'muted' }, v.status === 'running' ? '生成中…' : '这一版没有 sheet 图。'));
     }
 
-    return h('div', {}, h('h2', {}, `v${v.version}`), info, prompts, videoBox, result, sheet);
+    return h('div', {}, h('h2', {}, `v${v.version}`), info, result, prompts, videoBox, sheet);
   }
 
   await render();
