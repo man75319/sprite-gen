@@ -136,6 +136,7 @@ def test_what_each_paid_verb_calls() -> None:
         "gen": ["openai", "xai", "dmx"], "gen-set": ["openai", "xai", "dmx"], "logo": ["openai", "xai", "dmx"],
         "pixel-draw": ["anthropic"], "curation": ["xai"],
         "video": ["xai"], "video-extend": ["xai"], "video-edit": ["xai"], "video-set": ["xai"],
+        "char": ["xai", "dmx"],
     }
     assert verbs["video-resume"]["providers"] == ["xai"] and verbs["video-resume"]["paid"] is False
     assert "providers" not in verbs["video-loop"] and verbs["video-loop"]["paid"] is False

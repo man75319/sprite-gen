@@ -71,5 +71,6 @@ its `--help` and its doc ([docs/README.md](README.md)).
 | `curation` | `xai` (the reroll and in-between buttons on grok; codex on its own login) | yes |
 | `video`, `video-extend`, `video-edit`, `video-set` | `xai` | yes |
 | `video-resume` | `xai` | no |
+| `char` | `dmx` or `xai`, the character's `--provider` (`char action add` / `regen` run `video-set`; every other `char` command calls none) | yes |
 
 Every other verb calls no provider.

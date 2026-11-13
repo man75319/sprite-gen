@@ -123,13 +123,14 @@ reading, the picture decides**; write the chosen body plan into the character's 
 
 A character's profile and its wrapper: a `character.json` beside the character's work (provider, model, base,
 body_plan, description, resolution, key, motions) and `scripts\myautosprite\char.ps1` (`-DryRun` prints the prompts;
-`-OutDir` runs the set).
+`-OutDir` runs the set). **Superseded by `sprite-gen char`** ([char](char.md)): the spec is locked on the character,
+each action's generations are kept as versions, and its dry run prints the prompt the run sends.
 
 ## Scripts of this fork (`scripts/myautosprite/`)
 
 | Script | What it does |
 |---|---|
-| `char.ps1` | A character's `character.json` turned into `video-set` flags, so a run cannot forget the body plan |
+| `char.ps1` | Superseded by `sprite-gen char` ([char](char.md)). A character's `character.json` turned into `video-set` flags; it leaves out `--action-seconds` and `--body-height`, and its `-DryRun` asks `video-prompt`, whose prompt can differ from the one sent |
 | `smoke.ps1` | One transparent side-view image through grok: are the key, the network and the endpoint working |
 | `flood_cut.py` | A flat background cut off a drawing by flood fill from the border only (art whose colours sit close to the paper) |
 | `make_key_canvas.py` | A cut-out drawing put on a flat chroma canvas, framed for `sprite-gen video`; pixels at alpha 64 or under dropped (`--alpha-floor`), so a generator's edge specks do not widen the subject's box and shrink it |

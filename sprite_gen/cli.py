@@ -10,6 +10,7 @@ from typing import Callable
 from sprite_gen import _modules, gen
 from sprite_gen.util import env_file
 from sprite_gen.background import tile
+from sprite_gen.char import char_cmd
 from sprite_gen.curate import anchor
 from sprite_gen.compose import compose_atlas, compose_cycle, compose_gif, export_aseprite, export_phaser, export_pngs
 from sprite_gen.qa import correction_loop, inspect, preview, score, motion
@@ -464,6 +465,12 @@ COMMANDS: dict[str, tuple[str, Callable[[argparse.ArgumentParser], None], Callab
         "Lay the Breathe layer over a folder of loop frames: pixel (default) or smooth (large illustrations, video frames); smooth can choose its beat to miss the hands (--avoid-region).",
         breathe.add_arguments,
         breathe.run,
+    ),
+    # A character and its actions over the verbs above: the ledger the skill and the Studio web both call (docs/char.md).
+    "char": (
+        "Characters and their actions: a locked spec per character, each action's generations kept as versions, a dry run that prints the prompt sent, one atlas of every current version.",
+        char_cmd.add_arguments,
+        char_cmd.run,
     ),
     "inspect": ("Inspect sprite rows for frame-count, identity, and motion defects.", _add_inspect, inspect.run),
     "score": ("Score a sprite inspect report and emit correction hints.", _add_score, score.run),

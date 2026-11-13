@@ -1,3 +1,6 @@
+# SUPERSEDED by `sprite-gen char` (docs/char.md): the spec locked on the character, every generation kept as a
+# version, and a dry run that prints the prompt the run sends. Kept for the characters under work\<name>\.
+#
 # A character's clip settings, kept beside the character instead of retyped per run.
 #
 # sprite-gen's video verbs take the description as flags (`--character`, `--body-plan`, `--motion`): there is no

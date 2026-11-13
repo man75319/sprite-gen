@@ -36,6 +36,8 @@ PROVIDER_CALLS: dict[str, tuple[str, ...]] = {
     "video-edit": (address.XAI,),
     "video-resume": (address.XAI,),
     "video-set": (address.XAI,),
+    # `char action add` / `regen` run video-set with the character's --provider (dmx by default)
+    "char": (address.XAI, address.DMX),
 }
 # Verbs that call a provider and buy nothing: `video-resume` polls and downloads a clip an earlier run bought.
 NO_PURCHASE = frozenset({"video-resume"})

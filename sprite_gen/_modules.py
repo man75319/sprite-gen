@@ -73,6 +73,9 @@ MODULE_DOMAIN = {
     'preview': 'qa',
     'serve_curation': 'serve',
     'serve_compose': 'serve',
+    'ledger': 'char',
+    'char_plan': 'char',
+    'char_cmd': 'char',
     'gif_utils': 'util',
     'resample': 'util',
 }
@@ -94,6 +97,7 @@ DOMAINS: list[tuple[str, str]] = [
     ("scene", "Scene — asset placement, camera, lighting, rendering and inspection"),
     ("qa", "QA — motion/contact measurements, inspect, score, preview, bounded correction loop"),
     ("serve", "Webviews — curation and composition canvases"),
+    ("char", "Characters — a character's actions, each generation kept as a version (docs/char.md)"),
     ("spec", "Spec — read-only assets, request migrations and run I/O"),
     ("util", "Utilities"),
 ]
